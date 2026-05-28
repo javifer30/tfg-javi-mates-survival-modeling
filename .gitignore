@@ -1,0 +1,64 @@
+# Data and model artifacts
+/models/
+outputs/models/*
+outputs/checkpoints/*
+outputs/metrics/*
+outputs/predictions/*
+outputs/figures/*
+outputs/logs/*
+!outputs/models/.gitkeep
+!outputs/checkpoints/.gitkeep
+!outputs/metrics/.gitkeep
+!outputs/predictions/.gitkeep
+!outputs/figures/.gitkeep
+!outputs/logs/.gitkeep
+
+# Python
+env/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary local files
+basura/
+gemini.md
+mimic_timeseries_sparse_optimization_plan.md
+
+# External reference repositories kept locally for methodology review.
+src/models_references/
+src/preprocessing paper/
+
+# memoria
+Memoria/
+Memoria/**/*.aux
+Memoria/**/*.bbl
+Memoria/**/*.fdb_latexmk
+Memoria/**/*.fls
+Memoria/**/*.gz
+Memoria/**/*.log
+Memoria/**/*.md
+Memoria/**/*.out
+Memoria/**/*.pdf
+Memoria/**/*.toc
+*.pdf
+*.aux
+
+# Data from MIMIC-IV or derived patient-level files must not be versioned.
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!data/mimic_extraction_explanation.md
