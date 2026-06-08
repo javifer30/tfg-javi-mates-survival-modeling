@@ -1,0 +1,13 @@
+output_path: outputs/metrics/static_model_comparison.csv
+
+models:
+  - name: Kaplan-Meier
+    metrics_path: outputs/metrics/kaplan_meier/kaplan_meier_metrics.json
+  - name: CoxPH
+    metrics_path: outputs/metrics/coxph/coxph_metrics.json
+  - name: DeepSurv
+    metrics_path: outputs/metrics/deepsurv/deepsurv_metrics.json
+  - name: PCHazard
+    metrics_path: outputs/metrics/pchazard/pchazard_metrics.json
+  - name: DeepHit
+    metrics_path: outputs/metrics/deephit/deephit_metrics.json

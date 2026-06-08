@@ -18,6 +18,11 @@ La regla general del proyecto es:
 
 ---
 
+## 0. Entorno del proyecto
+
+-Usar siempre el entorno tfg-survival para pruebas, validaciones y test. 
+-Mantener los requirements del entorno siempre actualizados, si añades algo de codigo donde incluyas nuevas dependencias tienes que añadirlas a requirements.txt
+
 ## 1. Principios generales
 
 ### 1.1. Escribir código simple antes que código sofisticado
@@ -678,7 +683,316 @@ La adaptación debe centrarse en integrar el modelo con nuestro dataset, no en i
 
 ---
 
-### 5.6. Modelos deep learning
+### 5.6. Implementación de modelos estáticos finales
+
+Los modelos estáticos principales del TFG son:
+
+```text
+Kaplan-Meier
+CoxPH
+DeepSurv
+PCHazard
+DeepHit
+````
+
+`Kaplan-Meier` se utiliza como análisis descriptivo de la supervivencia observada de la cohorte, no como modelo predictivo principal. Los modelos predictivos estáticos deben compartir el mismo dataset base:
+
+```text
+X_static
+time_to_event
+observed_event
+```
+
+donde `X_static` contiene las covariables estáticas ya imputadas, codificadas y normalizadas, `time_to_event` representa la duración observada hasta evento o censura, y `observed_event` vale 1 si se observa la muerte y 0 si el paciente está censurado.
+
+---
+
+#### 5.6.1. CoxPH con `lifelines`
+
+`CoxPH` debe implementarse con:
+
+```python
+from lifelines import CoxPHFitter
+```
+
+Codex no debe reimplementar desde cero la verosimilitud parcial de Cox. Debe usar `lifelines.CoxPHFitter` como implementación estándar y crear un wrapper simple:
+
+```text
+src/models/coxph_tfg.py
+configs/coxph.yaml
+```
+
+Entrada esperada:
+
+```text
+DataFrame con:
+- covariables estáticas
+- duration_col = "time_to_event"
+- event_col = "observed_event"
+```
+
+Ejemplo mínimo:
+
+```python
+from lifelines import CoxPHFitter
+
+cph = CoxPHFitter(penalizer=config.get("penalizer", 0.0))
+cph.fit(
+    train_df,
+    duration_col="time_to_event",
+    event_col="observed_event",
+)
+```
+
+El wrapper debe encargarse de:
+
+* cargar `train`, `validation` y `test`;
+* ajustar el modelo solo con `train`;
+* guardar coeficientes, hazard ratios y supervivencia base;
+* generar predicciones de riesgo o supervivencia en `validation` y `test`;
+* guardar métricas en el formato común del proyecto.
+
+No hacer selección manual de variables dentro del wrapper salvo que esté definida en configuración.
+
+---
+
+#### 5.6.2. DeepSurv basado en la implementación original
+
+`DeepSurv` debe implementarse a partir de la referencia original guardada en:
+
+```text
+src/models_references/DeepSurv/
+```
+
+La clase original recibe:
+
+```text
+x = covariables del paciente
+t = tiempo observado
+e = indicador de evento
+```
+
+Por tanto, para nuestro proyecto:
+
+```text
+X_static       → x
+time_to_event  → t
+observed_event → e
+```
+
+Codex debe conservar la lógica principal de DeepSurv:
+
+* red neuronal feed-forward sobre covariables estáticas;
+* salida escalar de riesgo;
+* pérdida basada en la verosimilitud parcial de Cox;
+* evaluación mediante C-index u otras métricas comunes del proyecto.
+
+La adaptación debe estar en:
+
+```text
+src/models/deepsurv_tfg.py
+configs/deepsurv.yaml
+```
+
+El objetivo de `deepsurv_tfg.py` no es rediseñar DeepSurv, sino adaptar el dataset del TFG al formato esperado por la implementación original.
+
+---
+
+#### 5.6.3. Sustituir PWE Poisson por PCHazard
+
+No implementar `PWE Poisson` como modelo principal.
+
+El modelo por intervalos del TFG será:
+
+```text
+PCHazard
+```
+
+La razón es que `PCHazard` está más alineado con los benchmarks de supervivencia neuronal y representa directamente un modelo de hazard constante por tramos. Codex debe implementarlo con `pycox`, no mediante una regresión Poisson manual por intervalos.
+
+Implementación recomendada:
+
+```python
+from pycox.models import PCHazard
+```
+
+Archivos esperados:
+
+```text
+src/models/pchazard_tfg.py
+configs/pchazard.yaml
+```
+
+Entrada esperada:
+
+```text
+X_static
+time_to_event
+observed_event
+```
+
+La discretización temporal debe estar definida en configuración:
+
+```yaml
+num_durations: 10
+max_horizon_days: 10
+```
+
+Codex debe usar las herramientas de transformación de etiquetas de `pycox` cuando sea posible, en lugar de crear una discretización manual distinta para este modelo.
+
+La arquitectura de red puede ser una MLP sencilla mediante `torchtuples`, manteniendo la configuración en YAML:
+
+```yaml
+hidden_layers: [128, 64]
+dropout: 0.1
+batch_norm: true
+learning_rate: 0.001
+batch_size: 256
+```
+
+El wrapper debe:
+
+* transformar etiquetas con la lógica de `PCHazard`;
+* entrenar el modelo solo con `train`;
+* usar `validation` para early stopping y selección de hiperparámetros;
+* generar curvas de supervivencia en `test`;
+* evaluar con las mismas métricas que el resto de modelos cuando sea posible.
+
+No debe mezclarse `PCHazard` con el antiguo `PWE Poisson`. Si queda código anterior de `PWE Poisson`, debe moverse a una carpeta exploratoria o dejarse fuera del pipeline principal.
+
+---
+
+#### 5.6.4. DeepHit basado en la implementación original
+
+`DeepHit` debe implementarse a partir de la referencia original guardada en:
+
+```text
+src/models_references/DeepHit/
+```
+
+La clase original `Model_DeepHit` espera:
+
+```text
+x_dim        = número de covariables
+num_Event    = número de eventos, sin contar censura
+num_Category = número de intervalos temporales de salida
+x            = covariables
+k            = etiqueta de evento/censura
+t            = tiempo hasta evento/censura
+mask1        = máscara para log-likelihood
+mask2        = máscara para ranking/calibración
+```
+
+Para nuestro proyecto:
+
+```text
+X_static      → x
+muerte        → evento 1
+censura       → evento 0
+num_Event     → 1
+num_Category  → 10
+```
+
+La adaptación debe estar en:
+
+```text
+src/models/deephit_tfg.py
+configs/deephit.yaml
+```
+
+Codex debe conservar la lógica principal de DeepHit:
+
+* subred compartida feed-forward;
+* subred específica por evento;
+* salida `num_Event × num_Category`;
+* pérdida de log-likelihood;
+* ranking loss;
+* calibration loss si se mantiene la versión del código original usada como referencia;
+* tratamiento correcto de censura mediante máscaras.
+
+La creación de `mask1` y `mask2` debe implementarse en una función separada y testeable:
+
+```python
+def build_deephit_masks(time_bins, event, num_events, num_categories):
+    ...
+```
+
+No hardcodear `num_Event` ni `num_Category` dentro del modelo. Deben venir de configuración.
+
+---
+
+#### 5.6.5. Comparación justa entre modelos estáticos
+
+Para comparar `CoxPH`, `DeepSurv`, `PCHazard` y `DeepHit`, Codex debe mantener:
+
+* mismo split de train, validation y test;
+* mismas covariables estáticas;
+* misma definición de evento y censura;
+* mismo horizonte máximo cuando aplique;
+* misma normalización e imputación ajustada solo con train;
+* mismas métricas comunes.
+
+Diferencias permitidas:
+
+* `CoxPH` usa una implementación estadística de `lifelines`;
+* `DeepSurv` usa la estructura original del repo de DeepSurv;
+* `PCHazard` usa `pycox`;
+* `DeepHit` usa la estructura original del repo de DeepHit.
+
+Las diferencias de rendimiento deben atribuirse al modelo, no a cambios innecesarios en el preprocesamiento.
+
+````
+
+Además, en la estructura del proyecto cambia estos bloques:
+
+```markdown
+configs/
+│   ├── paths.yaml
+│   ├── data_preprocessing.yaml
+│   ├── coxph.yaml
+│   ├── deepsurv.yaml
+│   ├── pchazard.yaml
+│   ├── deephit.yaml
+│   ├── dynamic_deephit.yaml
+│   ├── dysurv.yaml
+│   └── xmi_icu.yaml
+````
+
+y:
+
+```markdown
+│   ├── models/
+│   │   ├── coxph_tfg.py
+│   │   ├── deepsurv_tfg.py
+│   │   ├── pchazard_tfg.py
+│   │   ├── deephit_tfg.py
+│   │   ├── dynamic_deephit_tfg.py
+│   │   ├── dysurv_tfg.py
+│   │   └── xmi_icu_tfg.py
+```
+
+Y en la sección de dependencias añade:
+
+````markdown
+Para los modelos estáticos finales, las dependencias mínimas deben incluir:
+
+```text
+lifelines
+pycox
+torchtuples
+````
+
+`lifelines` se usará para `CoxPH`. `pycox` y `torchtuples` se usarán para `PCHazard`.
+
+```
+::contentReference[oaicite:1]{index=1}
+```
+
+[1]: https://lifelines.readthedocs.io/en/latest/fitters/regression/CoxPHFitter.html "CoxPHFitter — lifelines 0.30.3 documentation"
+
+---
+
+### 5.7. Modelos deep learning
 
 Para PyTorch:
 
@@ -704,7 +1018,7 @@ for batch in train_loader:
 
 ---
 
-### 5.7. Autoencoder + survival model
+### 5.8. Autoencoder + survival model
 
 Si se combina un autoencoder con un modelo de supervivencia:
 

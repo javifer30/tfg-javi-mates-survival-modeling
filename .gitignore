@@ -1,11 +1,13 @@
 # Data and model artifacts
 /models/
+/checkpoints/
 outputs/models/*
 outputs/checkpoints/*
 outputs/metrics/*
 outputs/predictions/*
 outputs/figures/*
 outputs/logs/*
+outputs/preprocessors/
 !outputs/models/.gitkeep
 !outputs/checkpoints/.gitkeep
 !outputs/metrics/.gitkeep
@@ -35,6 +37,39 @@ basura/
 gemini.md
 mimic_timeseries_sparse_optimization_plan.md
 
+# Exploratory and historical material not needed for the current static
+# pipeline commit. Keep local until explicitly reviewed for reproducibility.
+notebooks/
+reports/
+references/
+
+# Legacy/upstream extraction and old feature-engineering code. These are not
+# imported by scripts/run_static_pipeline.py or its current static dependency
+# closure.
+configs/data_config.yaml
+configs/features.yaml
+configs/train.yaml
+scripts/evaluate.py
+scripts/run_mimic_pipeline.py
+scripts/train_static_pipeline.py
+src/data/data_loader.py
+src/data/mimic_direct_extraction.py
+src/data/mimic_timeseries_sparse.py
+src/features/
+src/models/base.py
+src/models/cox.py
+src/models/deepsurv.py
+src/models/deepsurv_model.py
+src/models/pwe_model.py
+src/models/pwe_poisson.py
+src/models/rsf_model.py
+src/utils/split_train_test.py
+
+# Optional standalone diagnostics. Static training already writes the main
+# time-dependent metric artifacts; keep these out until you choose to use them.
+scripts/evaluate_deephit_time_dependent.py
+scripts/evaluate_pchazard_time_dependent.py
+
 # External reference repositories kept locally for methodology review.
 src/models_references/
 src/preprocessing paper/
@@ -55,6 +90,12 @@ Memoria/**/*.toc
 *.aux
 
 # Data from MIMIC-IV or derived patient-level files must not be versioned.
+# Some files below are required at runtime but must be supplied manually after
+# cloning, especially:
+# - data/processed/mimic_extraction/flat_features.csv
+# - data/processed/mimic_extraction/labels.csv
+# - generated data/processed/static/*.parquet files when run_build_static_data
+#   is false in configs/static_pipeline.yaml
 data/raw/*
 data/interim/*
 data/processed/*
@@ -62,3 +103,6 @@ data/processed/*
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 !data/mimic_extraction_explanation.md
+
+# guidelines for the models
+guidelines/

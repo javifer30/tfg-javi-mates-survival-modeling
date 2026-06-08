@@ -1,0 +1,189 @@
+# Reproducibility
+
+## Purpose
+
+This file explains how to reproduce the current project pipeline from a local
+checkout with local MIMIC-IV access. It should be updated only when commands,
+dependencies, configs, data preparation steps or pipeline assumptions change.
+
+Related documentation:
+
+- [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains how the current pipeline was
+  reached.
+- [DECISIONS.md](DECISIONS.md) records methodological choices.
+- [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md) records executed runs.
+- [TODO.md](TODO.md) tracks missing reproducibility work.
+
+## Environment Setup
+
+1. Create and activate the local environment.
+
+```bash
+python -m venv env
+env\Scripts\activate
+```
+
+2. Install dependencies.
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Keep all paths relative to the repository root.
+
+4. Do not commit MIMIC-IV data, derived datasets, outputs, checkpoints or local
+   environment folders.
+
+## Data Preparation
+
+The static pipeline expects the direct MIMIC-IV extraction artifacts:
+
+- `data/processed/mimic_extraction/flat_features.csv`
+- `data/processed/mimic_extraction/labels.csv`
+
+The canonical static data configuration is:
+
+- `configs/static_data.yaml`
+
+It defines:
+
+- seed `42`;
+- split proportions `60/20/20`;
+- event stratification;
+- input columns from the extracted flat features and labels;
+- output directory `data/processed/static`;
+- fitted preprocessor path `outputs/preprocessors/static_preprocessor.pkl`;
+- dataset summary path `outputs/metrics/static_dataset_summary.json`.
+
+Build the static dataset with:
+
+```bash
+python scripts/build_static_data.py --config configs/static_data.yaml
+```
+
+Expected static outputs:
+
+- `data/processed/static/train_static.parquet`
+- `data/processed/static/val_static.parquet`
+- `data/processed/static/test_static.parquet`
+- `data/processed/static/split_assignments.parquet`
+- `outputs/preprocessors/static_preprocessor.pkl`
+- `outputs/metrics/static_dataset_summary.json`
+
+## Training
+
+The current static model configs are:
+
+- `configs/kaplan_meier.yaml`
+- `configs/coxph.yaml`
+- `configs/deepsurv.yaml`
+- `configs/pchazard.yaml`
+- `configs/deephit.yaml`
+
+Train one model with:
+
+```bash
+python scripts/train_static_model.py --config configs/coxph.yaml
+```
+
+Run the configured static pipeline with:
+
+```bash
+python scripts/run_static_pipeline.py --config configs/static_pipeline.yaml
+```
+
+`configs/static_pipeline.yaml` currently builds the static dataset, trains
+Kaplan-Meier, CoxPH, DeepSurv, PCHazard and DeepHit, then runs the configured
+evaluation consolidation.
+
+## Evaluation
+
+The static evaluation config is:
+
+- `configs/static_evaluation.yaml`
+
+It consolidates model metrics into:
+
+- `outputs/metrics/static_model_comparison.csv`
+
+Run evaluation consolidation with:
+
+```bash
+python scripts/evaluate_static_model.py --config configs/static_evaluation.yaml
+```
+
+The current static metric protocol uses the same day grid across eligible
+models:
+
+```yaml
+evaluation_time_grid: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+horizon_times: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+```
+
+`evaluation_time_grid` is used for IBS and IBLL/NBLL. `horizon_times` is used
+for horizon C-index. IBS and IBLL/NBLL are computed on validation and test by
+default, not on full train, to avoid memory-heavy evaluation over all unique
+observed times.
+
+Additional time-dependent evaluation scripts exist for the curve-producing
+static neural models:
+
+```bash
+python scripts/evaluate_pchazard_time_dependent.py --config configs/pchazard.yaml
+python scripts/evaluate_deephit_time_dependent.py --config configs/deephit.yaml
+```
+
+Expected time-dependent outputs include:
+
+- `outputs/metrics/pchazard/pchazard_weighted_c_index_by_horizon.csv`
+- `outputs/metrics/pchazard/pchazard_antolini_ctd.csv`
+- `outputs/metrics/deephit/deephit_weighted_c_index_by_horizon.csv`
+- `outputs/metrics/deephit/deephit_antolini_ctd.csv`
+
+The main static training pipeline now also writes time-dependent metric files
+for CoxPH and DeepSurv:
+
+- `outputs/metrics/coxph/coxph_weighted_c_index_by_horizon.csv`
+- `outputs/metrics/coxph/coxph_antolini_ctd.csv`
+- `outputs/metrics/deepsurv/deepsurv_weighted_c_index_by_horizon.csv`
+- `outputs/metrics/deepsurv/deepsurv_antolini_ctd.csv`
+
+Model-specific metric artifacts are stored under one folder per model inside
+`outputs/metrics/`, for example:
+
+- `outputs/metrics/coxph/coxph_metrics.json`
+- `outputs/metrics/deepsurv/deepsurv_metrics.json`
+- `outputs/metrics/pchazard/pchazard_metrics.json`
+- `outputs/metrics/deephit/deephit_metrics.json`
+
+Metrics JSON files distinguish:
+
+- `harrell_c_index` for CoxPH and DeepSurv natural scalar risks;
+- `harrell_c_index_final_risk` for DeepHit and PCHazard final cumulative risk;
+- `ctd_antolini`, `horizon_c_index`, `mean_horizon_c_index`;
+- `ibs`, `ibll` and `nbll`;
+- `evaluation_time_grid` and `horizon_times`.
+
+## Assumptions
+
+- MIMIC-IV v3.1 data is available locally and is not versioned.
+- The static dataset uses adult ICU stays with valid positive observed time.
+- Train, validation and test splits are created before fitting preprocessing
+  statistics.
+- Preprocessing statistics are fitted on train only.
+- Static results are the current consolidated baseline; full dynamic landmark
+  training is still pending.
+- `src/models_references/` contains local methodological references and should
+  not be treated as project-owned model code.
+
+## Reproducibility Notes
+
+- Record every executed experiment in [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md).
+- Record methodological changes in [DECISIONS.md](DECISIONS.md).
+- Update this file when command names, config names, dependencies or pipeline
+  steps change.
+- If `outputs/metrics/static_model_comparison.csv` is missing after a run, rerun
+  evaluation consolidation and record the result in [EXPERIMENT_LOG.md](EXPERIMENT_LOG.md).
+- The root `README.md` may lag behind the final static pipeline. Treat this file
+  and `configs/static_pipeline.yaml` as the reproducibility authority until the
+  root README is refreshed.

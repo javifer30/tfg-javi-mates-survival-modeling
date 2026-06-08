@@ -1,0 +1,31 @@
+seed: 42
+
+paths:
+  train_path: data/processed/static/train_static.parquet
+  val_path: data/processed/static/val_static.parquet
+  test_path: data/processed/static/test_static.parquet
+  models_dir: outputs/models
+  checkpoints_dir: outputs/checkpoints
+  metrics_dir: outputs/metrics
+  predictions_dir: outputs/predictions
+  figures_dir: outputs/figures
+
+model:
+  name: deepsurv
+  num_durations: 10
+  max_horizon_days: 10
+  evaluation_time_grid: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  horizon_times: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  hidden_layers: [64, 32]
+  dropout: 0.1
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  epochs: 50
+  batch_size: 256
+  early_stopping_patience: 10
+  device: auto
+  log_every: 10
+  resume_from_checkpoint: null
+  save_best_checkpoint: true
+  save_last_checkpoint: true
+  save_every_n_epochs: 5

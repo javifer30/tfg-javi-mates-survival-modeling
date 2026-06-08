@@ -1,11 +1,25 @@
---extra-index-url https://download.pytorch.org/whl/cu124
-pandas==2.3.3
-numpy==2.4.0
-scikit-learn==1.8.0
-torch==2.6.0+cu124
+# Python 3.10 environment for the TFG survival pipeline.
+# Keep versions conservative for pycox/torchtuples/lifelines compatibility.
+numpy==1.26.4
+pandas==2.2.3
+polars==1.17.1
+pyarrow==18.1.0
+scipy==1.10.1
+scikit-learn==1.5.2
+joblib==1.4.2
+
+torch==2.3.1
 torchtuples==0.2.2
-matplotlib==3.10.8
-pyyaml==6.0.3
-jupyterlab==4.5.1
-lifelines==0.30.3
+pycox==0.3.0
+lifelines==0.30.0
+
+matplotlib==3.9.2
 seaborn==0.13.2
+tqdm==4.67.1
+pyyaml==6.0.2
+pytest==8.3.4
+
+# Useful when the project is moved to Lightning AI for longer runs.
+lightning==2.4.0
+pytorch-lightning==2.4.0
+torchmetrics==1.6.0
