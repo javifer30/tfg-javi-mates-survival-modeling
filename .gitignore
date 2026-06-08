@@ -8,6 +8,9 @@ outputs/predictions/*
 outputs/figures/*
 outputs/logs/*
 outputs/preprocessors/
+outputs/tuning/
+outputs/final_static/
+outputs/diagnostics/
 !outputs/models/.gitkeep
 !outputs/checkpoints/.gitkeep
 !outputs/metrics/.gitkeep

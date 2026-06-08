@@ -858,3 +858,169 @@ references, generated artifacts or sensitive MIMIC-derived data.
   `docs/REPRODUCIBILITY.md` were not updated.
 - Existing TODO priorities already cover publication/package readiness and
   notebook review, so `docs/TODO.md` was not changed.
+
+## 2026-06-08 — Static Tuning and Final-Seed Pipeline Preparation
+
+### Purpose
+
+Prepare validation-only hyperparameter tuning and three-seed final evaluation
+for CoxPH, DeepSurv, PCHazard and corrected DeepHit without running full
+tuning.
+
+### Changes Made
+
+- Added `configs/static_tuning.yaml` with small model-specific grids and fixed
+  evaluation/horizon grids `[1, 2, 3, 4, 5, 6, 7, 8, 9]`.
+- Added `scripts/tune_static_models.py` for validation-only tuning output under
+  `outputs/tuning/{model}/`.
+- Added `scripts/run_final_static_seeds.py` for final selected-hyperparameter
+  runs under `outputs/final_static/{model}/seed_{seed}/`.
+- Added shared static-trainer support for configurable evaluation splits,
+  explicit test-metric guards, optional prediction/model/checkpoint artifacts
+  and validation-only runs that do not load the test split.
+- Updated CoxPH, DeepSurv, PCHazard and DeepHit trainers to use the shared
+  split/artifact controls while preserving baseline defaults.
+- Added focused tests for grid expansion, validation-only run config creation,
+  validation Ctd/IBLL selection and exact final seed enforcement.
+
+### Safeguards
+
+- Tuning uses train and validation splits only, with
+  `evaluation.allow_test_metrics: false`.
+- Final-seed runs require exactly seeds `42`, `123` and `2026`.
+- Tuning/final runs save config snapshots when actually executed.
+- PCHazard/DeepHit baseline-specific time-dependent output paths are stripped
+  from generated run configs so runs write into isolated output folders.
+- Large model/checkpoint artifacts are disabled by default in tuning and final
+  static seed configs unless explicitly enabled.
+
+### Validation
+
+- Ran
+  `C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_static_tuning.py`;
+  result: 5 passed.
+- Ran
+  `C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_static_tuning.py tests/test_static_pipeline.py`;
+  result: 13 passed.
+- Ran
+  `C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_static_models.py --config configs/static_tuning.yaml --models coxph --dry-run`;
+  result: planned two isolated CoxPH tuning configs under
+  `outputs/tuning/coxph/...`.
+- Ran
+  `C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/run_final_static_seeds.py --help`;
+  result: command loaded and displayed CLI help.
+
+### Documentation Updates
+
+- Added `DEC-007` to `docs/DECISIONS.md`.
+- Updated `docs/REPRODUCIBILITY.md` with tuning and final-seed commands.
+- Updated `docs/TODO.md` to mark pipeline preparation complete and keep actual
+  tuning/final static runs open.
+- No full tuning or final model experiment was run, so
+  `docs/EXPERIMENT_LOG.md` was not updated.
+
+### Next Recommended Action
+
+Run validation-only static tuning after the remaining DeepHit diagnostic tasks
+or after explicit approval to start tuning.
+
+## 2026-06-08 — Lightning Readiness Audit For Static Tuning
+
+### Purpose
+
+Check whether the static tuning and final-seed pipeline can run from a fresh
+clone in Lightning AI without modifying model logic or running full
+experiments.
+
+### Scope
+
+- Inspected imports for `scripts/tune_static_models.py`,
+  `scripts/run_final_static_seeds.py`, `scripts/train_static_model.py` and
+  `scripts/evaluate_static_model.py`.
+- Checked `configs/static_tuning.yaml` and static model configs for relative
+  paths.
+- Checked `.gitignore` coverage for generated tuning/final outputs, data,
+  checkpoints and model artifacts.
+- Checked declared dependencies in `requirements.txt` and `environment.yml`.
+
+### Findings
+
+- The tuning/final scripts depend on existing static model trainers, shared
+  static utilities and standard project utilities; no new Python package was
+  found beyond the current requirements.
+- `configs/static_tuning.yaml` uses relative paths only.
+- `configs/static_pipeline.yaml` currently has `run_build_static_data: true`,
+  which is better for fresh clones after external MIMIC-derived inputs are
+  supplied.
+- Added `.gitignore` coverage for generated `outputs/tuning/` and
+  `outputs/final_static/`.
+- Legacy tracked files `src/data/mimic_direct_extraction.py` and
+  `src/data/mimic_timeseries_sparse.py` still contain hardcoded local Windows
+  paths, but they are not needed by the static tuning/final-seed pipeline.
+
+### Changes Made
+
+- Updated `.gitignore` to ignore `outputs/tuning/` and
+  `outputs/final_static/`.
+
+### Documentation Updates
+
+- No experiment was run, so `docs/EXPERIMENT_LOG.md` was not updated.
+- No methodology changed, so `docs/DECISIONS.md` was not updated.
+- No priorities changed, so `docs/TODO.md` was not updated.
+- `docs/REPRODUCIBILITY.md` was not updated because this turn only audited the
+  existing commands.
+
+## 2026-06-08 — CoxPH Smoke-Test Metric Regression Investigation
+
+### Purpose
+
+Investigate why the new CoxPH final-seed smoke test produced much worse
+metrics than the previous static CoxPH benchmark before pushing/running on
+Lightning AI.
+
+### Findings
+
+- `configs/static_pipeline.yaml`, `configs/static_data.yaml`,
+  `configs/coxph.yaml` and `configs/static_evaluation.yaml` still point to the
+  same static train/validation/test parquet files, feature set, duration/event
+  columns, preprocessing outputs and fixed evaluation grid.
+- The static dataset summary remains at 35 features with 56,101 train, 18,700
+  validation and 18,701 test patients.
+- The partial CoxPH smoke tuning output only contained `coxph_cfg_001`, which
+  used `penalizer=0.01` and `l1_ratio=0.0`.
+- That weak-penalty candidate produced unstable coefficients: `height`
+  approximately `-1717` and `nullheight` approximately `10.8`, consistent with
+  the lifelines convergence warning and the degraded metrics.
+- A diagnostic run through the new final-static pipeline with the old stable
+  setting `penalizer=0.1`, `l1_ratio=0.0` reproduced the previous benchmark:
+  test Ctd/Harrell 0.7411, test IBS 0.1147 and test IBLL/NBLL 0.3693.
+
+### Changes Made
+
+- Expanded the CoxPH tuning grid in `configs/static_tuning.yaml` to
+  `penalizer: [0.0, 0.001, 0.01, 0.1]` with `l1_ratio: [0.0]`.
+- Updated `docs/REPRODUCIBILITY.md` with the CoxPH grid and convergence-warning
+  note.
+- Added `DEC-008` documenting the CoxPH grid expansion and warning against
+  reusing the partial smoke selection.
+- Added `EXP-005` documenting the isolated old-configuration diagnostic run.
+- Updated `docs/TODO.md` to require rerunning CoxPH validation-only tuning with
+  the full grid before Lightning AI final runs.
+- Added `outputs/diagnostics/` to `.gitignore` because the CoxPH diagnostic
+  run writes local generated artifacts that should not be committed.
+
+### Validation
+
+- Ran the old fixed CoxPH diagnostic via `tfg-survival`; result reproduced the
+  old CoxPH benchmark.
+- Ran `tfg-survival` dry-run for CoxPH tuning; result planned four CoxPH
+  configurations.
+- Ran `tfg-survival` `pytest tests/test_static_tuning.py`; result: 5 passed.
+
+### Recommendation
+
+- The tuning/final pipeline is structurally safe for Lightning AI, but the
+  current CoxPH `best_hyperparameters.json` from the partial smoke run is not
+  safe to reuse.
+- Re-run CoxPH tuning with the expanded grid before any final static seed run.

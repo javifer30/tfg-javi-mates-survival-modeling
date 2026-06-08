@@ -428,3 +428,99 @@ Related history: not yet consolidated
       curves.
 - [ ] Run a small synthetic DeepHit overfit test.
 - [ ] Tune DeepHit hyperparameters after diagnostics.
+
+## DEC-007 — Validation-only static tuning and three-seed final runs
+
+Date: 2026-06-08
+Status: accepted
+Scope: evaluation
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The corrected DeepHit implementation is now competitive enough to enter the
+  static model tuning phase together with CoxPH, DeepSurv and PCHazard.
+- Hyperparameters must be selected without using test metrics.
+- Final static estimates should be less seed-dependent for neural models.
+
+### Decision
+- Add a dedicated static tuning config and scripts for validation-only
+  hyperparameter selection.
+- Select tuning configurations by validation `ctd_antolini`, using validation
+  `ibll`/`nbll` as the tie-breaker and logging validation IBS plus mean horizon
+  C-index.
+- Keep the fixed evaluation protocol unchanged:
+  horizon/evaluation grids `[1, 2, 3, 4, 5, 6, 7, 8, 9]`.
+- During tuning, evaluate only train and validation splits and do not load or
+  score the test split.
+- Run final static models only after tuning, using the selected validation
+  hyperparameters with exactly seeds `42`, `123` and `2026`.
+
+### Reason
+- This separates model-selection evidence from final test reporting and avoids
+  accidental test leakage.
+- Three final seeds provide a lightweight reproducibility check without turning
+  tuning into a large compute campaign.
+- Keeping output folders separate preserves previous fixed-baseline metrics.
+
+### Consequences
+- Tuning outputs go under `outputs/tuning/{model}/`.
+- Final static seed outputs go under
+  `outputs/final_static/{model}/seed_{seed}/`.
+- Config snapshots are saved with real tuning/final runs.
+- Large model/checkpoint artifacts are disabled by default unless explicitly
+  configured.
+
+### Related files
+- configs/static_tuning.yaml
+- scripts/tune_static_models.py
+- scripts/run_final_static_seeds.py
+- src/models/static_common.py
+- docs/REPRODUCIBILITY.md
+
+### Follow-up
+- [ ] Run validation-only static tuning.
+- [ ] Run final static three-seed evaluation after tuning selection.
+
+## DEC-008 — Expand CoxPH ridge grid after smoke-test regression
+
+Date: 2026-06-08
+Status: accepted
+Scope: evaluation
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- A CoxPH final-seed smoke test selected only `penalizer=0.01` and produced
+  much worse metrics than the previous static CoxPH benchmark.
+- The smoke run also produced a lifelines convergence warning and unstable
+  coefficients, especially for `height` and `nullheight`.
+- A diagnostic run through the new final-static pipeline using the old fixed
+  CoxPH setting `penalizer=0.1` reproduced the previous benchmark metrics.
+
+### Decision
+- Keep the CoxPH training and evaluation logic unchanged.
+- Expand the CoxPH tuning grid to
+  `penalizer: [0.0, 0.001, 0.01, 0.1]` and `l1_ratio: [0.0]`.
+- Do not treat the partial smoke result with only `penalizer=0.01` as a valid
+  selected CoxPH configuration.
+
+### Reason
+- The regression is explained by an unstable weak-penalty CoxPH candidate and
+  incomplete smoke coverage, not by a split, preprocessing or evaluation-grid
+  mismatch.
+- Including the old benchmark setting in the tuning grid lets validation
+  selection recover the stable CoxPH baseline before Lightning AI runs.
+
+### Consequences
+- CoxPH validation-only tuning must be rerun before final static seed runs.
+- Existing `outputs/tuning/coxph/best_hyperparameters.json` from the partial
+  smoke run should not be reused for Lightning AI final evaluation.
+
+### Related files
+- configs/static_tuning.yaml
+- configs/coxph.yaml
+- outputs/diagnostics/coxph/seed_42/metrics/coxph/coxph_metrics.json
+
+### Follow-up
+- [ ] Re-run CoxPH validation-only tuning with the expanded grid.

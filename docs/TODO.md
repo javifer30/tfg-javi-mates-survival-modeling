@@ -56,6 +56,10 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 - [ ] Run a small synthetic DeepHit overfit test.
 - [ ] Tune DeepHit hyperparameters after diagnostics.
 - [ ] Regenerate or consolidate the full static benchmark comparison after the corrected DeepHit run.
+- [ ] Re-run CoxPH validation-only tuning with the full penalizer grid
+      `[0.0, 0.001, 0.01, 0.1]` before any Lightning AI final-seed run.
+- [ ] Run validation-only static hyperparameter tuning for CoxPH, DeepSurv, PCHazard and DeepHit.
+- [ ] Run final static model evaluation with seeds 42, 123 and 2026 after validation selection.
 
 - [ ] Consolidate or regenerate `outputs/metrics/static_model_comparison.csv` from the final static model metrics.
 - [ ] Decide whether the thesis requires a full dynamic landmark pipeline and DySurv training, then document the decision in `docs/DECISIONS.md`.
@@ -85,6 +89,10 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 
 ## Done Recently
 
+- [x] Investigated CoxPH smoke-test metric regression and confirmed the new
+      pipeline reproduces the old CoxPH benchmark with `penalizer=0.1` —
+      2026-06-08
+- [x] Prepared validation-only static tuning and final three-seed pipeline with smoke tests — 2026-06-08
 - [x] Logged corrected DeepHit run after tail-support/ranking-loss fixes; test IBS improved to 0.1107 and IBLL/NBLL to 0.3531 — 2026-06-08
 - [x] Implemented approved DeepHit tail-support, censored-horizon mask and ranking-loss corrections with focused tests — 2026-06-08
 - [x] Organized static model metric artifacts under model-specific `outputs/metrics/<model>/` folders — 2026-06-07

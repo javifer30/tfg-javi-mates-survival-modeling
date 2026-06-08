@@ -226,3 +226,54 @@ PMF/tail diagnostics from `outputs/predictions/deephit_predictions.parquet`:
 - [ ] Run a small synthetic overfit test for DeepHit.
 - [ ] Tune `alpha`, `beta`, `gamma`, `ranking_sigma`, learning rate, batch size
       and early stopping only after diagnostics.
+
+## EXP-005 — CoxPH old-configuration diagnostic through final-static pipeline
+
+Date: 2026-06-08
+Status: completed
+Model: CoxPH
+Dataset: static MIMIC-IV adult ICU static dataset
+Config: generated from `configs/coxph.yaml`
+Seed: 42
+Run directory: `outputs/diagnostics/coxph/seed_42`
+Related decision: DEC-008
+
+### Goal
+- Check whether the new tuning/final-seed pipeline can reproduce the previous
+  CoxPH benchmark when using the old stable CoxPH configuration.
+
+### Command
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -c "import copy; from pathlib import Path; from src.utils.config import load_yaml; from scripts.tune_static_models import prepare_run_config, run_training, save_config_snapshot; from src.utils.logger import get_logger; cfg=load_yaml('configs/coxph.yaml'); rc, rd=prepare_run_config(copy.deepcopy(cfg),'coxph','diagnostic_old_fixed',{'penalizer':0.1,'l1_ratio':0.0},42,'outputs/diagnostics',phase='final_static',include_test=True,save_predictions=False,save_models=False,save_checkpoints=False); save_config_snapshot(rc, rd); metrics=run_training(rc, get_logger('coxph_old_fixed_diagnostic')); print('run_dir=', rd); print('val_ctd=', metrics['splits']['validation']['ctd_antolini']); print('test_ctd=', metrics['splits']['test']['ctd_antolini']); print('test_ibs=', metrics['splits']['test']['ibs']); print('test_ibll=', metrics['splits']['test']['ibll'])"
+```
+
+### Inputs
+- Dataset path: `data/processed/static/`
+- Train split: `data/processed/static/train_static.parquet`
+- Validation split: `data/processed/static/val_static.parquet`
+- Test split: `data/processed/static/test_static.parquet`
+- Preprocessor: `outputs/preprocessors/static_preprocessor.pkl`
+- Hyperparameters: `penalizer=0.1`, `l1_ratio=0.0`
+
+### Outputs
+- Metrics: `outputs/diagnostics/coxph/seed_42/metrics/coxph/coxph_metrics.json`
+- Config snapshot: `outputs/diagnostics/coxph/seed_42/config_snapshot.yaml`
+- Predictions: disabled for this diagnostic
+- Model artifact: disabled for this diagnostic
+
+### Results
+- Validation Ctd/Harrell: 0.7415.
+- Test Ctd/Harrell: 0.7411.
+- Test IBS: 0.1147.
+- Test IBLL/NBLL: 0.3693.
+
+### Interpretation
+- The new final-static pipeline reproduces the previous CoxPH benchmark when
+  the old stable penalization is used.
+- The CoxPH smoke-test regression is therefore attributed to an unstable
+  `penalizer=0.01` candidate and incomplete smoke tuning, not to changed split,
+  feature set, duration/event columns, preprocessing or evaluation grid.
+
+### Follow-up
+- [ ] Re-run CoxPH validation-only tuning with
+      `penalizer: [0.0, 0.001, 0.01, 0.1]` before Lightning AI final runs.

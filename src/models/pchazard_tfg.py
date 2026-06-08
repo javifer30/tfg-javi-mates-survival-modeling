@@ -19,7 +19,18 @@ from src.evaluation.time_dependent_survival import (
     time_to_index,
     weighted_c_index_at_horizon,
 )
-from src.models.static_common import cap_survival_targets, get_device, load_static_splits, model_metrics_dir, save_json, split_xy
+from src.models.static_common import (
+    cap_survival_targets,
+    configured_split_names,
+    configured_split_frames,
+    get_device,
+    load_static_splits,
+    model_metrics_dir,
+    save_json,
+    should_save_predictions,
+    should_save_test_survival_curves,
+    split_xy,
+)
 from src.utils.config import resolve_path
 
 
@@ -102,7 +113,7 @@ def train_pchazard(config, logger):
 
     paths = config["paths"]
     model_cfg = config["model"]
-    train, val, test = load_static_splits(paths)
+    train, val, test = load_static_splits(paths, include_test="test" in configured_split_names(config))
     x_train, time_train, event_train, _ = split_xy(train)
     x_val, time_val, event_val, _ = split_xy(val)
     _validate_pchazard_targets(time_train.values, event_train.values, "train")
@@ -184,9 +195,10 @@ def train_pchazard(config, logger):
         val_data=(x_val.values, y_val),
         verbose=model_cfg.get("verbose", False),
     )
-    model_path = Path(paths["models_dir"]) / "pchazard_model.pkl"
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    model.save_net(str(model_path.with_suffix(".pt")))
+    if model_cfg.get("save_model", True):
+        model_path = Path(paths["models_dir"]) / "pchazard_model.pkl"
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        model.save_net(str(model_path.with_suffix(".pt")))
     metrics_dir = model_metrics_dir(paths, "pchazard")
     train_log = pd.DataFrame(log.to_pandas())
     train_log.to_csv(metrics_dir / "pchazard_train_log.csv", index=False)
@@ -204,10 +216,12 @@ def train_pchazard(config, logger):
         "horizon_times": horizon_times,
         "splits": {},
     }
+    save_predictions_flag = should_save_predictions(config)
+    save_test_survival_flag = should_save_test_survival_curves(config)
     predictions = []
     antolini_rows = []
     weighted_rows = []
-    for split_name, split_df in {"train": train, "validation": val, "test": test}.items():
+    for split_name, split_df in configured_split_frames(config, train, val, test).items():
         x, time, event, ids = split_xy(split_df)
         _validate_pchazard_targets(time.values, event.values, split_name)
         time, event = cap_survival_targets(time, event, max_horizon_days)
@@ -220,7 +234,8 @@ def train_pchazard(config, logger):
         preds["risk_score"] = risk
         preds["model"] = "pchazard"
         preds["split"] = split_name
-        predictions.append(preds)
+        if save_predictions_flag:
+            predictions.append(preds)
         metrics["splits"][split_name] = evaluate_predictions(
             time_values,
             event_values,
@@ -252,10 +267,11 @@ def train_pchazard(config, logger):
             split_name,
             metrics["splits"][split_name]["harrell_c_index_final_risk"],
         )
-        if split_name == "test":
+        if split_name == "test" and save_test_survival_flag:
             surv.to_csv(Path(paths["predictions_dir"]) / "pchazard_test_survival_curves.csv")
 
-    pd.concat(predictions, ignore_index=True).to_parquet(Path(paths["predictions_dir"]) / "pchazard_predictions.parquet", index=False)
+    if predictions:
+        pd.concat(predictions, ignore_index=True).to_parquet(Path(paths["predictions_dir"]) / "pchazard_predictions.parquet", index=False)
     weighted_path = _output_path(
         eval_cfg.get("weighted_c_index_path"),
         metrics_dir / "pchazard_weighted_c_index_by_horizon.csv",

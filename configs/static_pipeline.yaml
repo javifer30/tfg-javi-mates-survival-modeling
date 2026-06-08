@@ -1,4 +1,4 @@
-run_build_static_data: false
+run_build_static_data: true
 run_evaluation: true
 
 static_data_config: configs/static_data.yaml

@@ -26,7 +26,19 @@ except ImportError:
 from src.data.static_dataset import EVENT_COL, ID_COL, SPLIT_COL, TIME_COL
 from src.evaluation.metrics import evaluate_predictions
 from src.evaluation.time_dependent_survival import horizon_c_index_dict, mean_horizon_c_index, survival_time_dependent_metrics
-from src.models.static_common import cap_survival_targets, get_device, load_static_splits, make_time_grid, model_metrics_dir, save_json, split_xy
+from src.models.static_common import (
+    cap_survival_targets,
+    configured_split_names,
+    configured_split_frames,
+    get_device,
+    load_static_splits,
+    make_time_grid,
+    model_metrics_dir,
+    save_json,
+    should_save_predictions,
+    should_save_test_survival_curves,
+    split_xy,
+)
 
 
 class DeepSurvNet(nn.Module if nn is not None else object):
@@ -189,7 +201,7 @@ def train_deepsurv(config, logger):
         raise ImportError("torch is required for DeepSurv")
     paths = config["paths"]
     model_cfg = config["model"]
-    train, val, test = load_static_splits(paths)
+    train, val, test = load_static_splits(paths, include_test="test" in configured_split_names(config))
     x_train, time_train, event_train, _ = split_xy(train)
     x_val, time_val, event_val, _ = split_xy(val)
     max_horizon_days = model_cfg.get("max_horizon_days", 10)
@@ -320,10 +332,12 @@ def train_deepsurv(config, logger):
         "horizon_times": horizon_times,
         "splits": {},
     }
+    save_predictions_flag = should_save_predictions(config)
+    save_test_survival_flag = should_save_test_survival_curves(config)
     predictions = []
     antolini_rows = []
     weighted_rows = []
-    for split_name, split_df in {"train": train, "validation": val, "test": test}.items():
+    for split_name, split_df in configured_split_frames(config, train, val, test).items():
         preds, survival, split_metrics, time_values, event_values = _predict(
             model,
             split_df,
@@ -337,7 +351,8 @@ def train_deepsurv(config, logger):
             eval_event_train.to_numpy(dtype=int),
         )
         preds["split"] = split_name
-        predictions.append(preds)
+        if save_predictions_flag:
+            predictions.append(preds)
         metrics["splits"][split_name] = split_metrics
         antolini, weighted = survival_time_dependent_metrics(
             split_name,
@@ -354,10 +369,11 @@ def train_deepsurv(config, logger):
         metrics["splits"][split_name]["horizon_c_index"] = horizon_c_index_dict(weighted)
         metrics["splits"][split_name]["mean_horizon_c_index"] = mean_horizon_c_index(weighted)
         logger.info("DeepSurv %s Harrell C-index: %.4f", split_name, split_metrics["harrell_c_index"])
-        if split_name == "test":
+        if split_name == "test" and save_test_survival_flag:
             survival.to_csv(Path(paths["predictions_dir"]) / "deepsurv_test_survival_curves.csv")
 
-    pd.concat(predictions, ignore_index=True).to_parquet(Path(paths["predictions_dir"]) / "deepsurv_predictions.parquet", index=False)
+    if predictions:
+        pd.concat(predictions, ignore_index=True).to_parquet(Path(paths["predictions_dir"]) / "deepsurv_predictions.parquet", index=False)
     pd.DataFrame(weighted_rows).to_csv(metrics_dir / "deepsurv_weighted_c_index_by_horizon.csv", index=False)
     pd.DataFrame(antolini_rows).to_csv(metrics_dir / "deepsurv_antolini_ctd.csv", index=False)
     save_json(metrics, metrics_dir / "deepsurv_metrics.json")

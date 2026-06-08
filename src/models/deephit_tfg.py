@@ -25,7 +25,19 @@ except ImportError:
 
 from src.evaluation.metrics import evaluate_predictions
 from src.evaluation.time_dependent_survival import horizon_c_index_dict, mean_horizon_c_index, survival_time_dependent_metrics
-from src.models.static_common import cap_survival_targets, get_device, load_static_splits, make_time_grid, model_metrics_dir, save_json, split_xy
+from src.models.static_common import (
+    cap_survival_targets,
+    configured_split_names,
+    configured_split_frames,
+    get_device,
+    load_static_splits,
+    make_time_grid,
+    model_metrics_dir,
+    save_json,
+    should_save_predictions,
+    should_save_test_survival_curves,
+    split_xy,
+)
 
 EPS = 1e-8
 
@@ -245,7 +257,7 @@ def train_deephit(config, logger):
     include_tail_category = model_cfg.get("include_tail_category", False)
     output_categories = deephit_output_categories(num_categories, include_tail_category)
     max_horizon_days = model_cfg.get("max_horizon_days", 10)
-    train, val, test = load_static_splits(paths)
+    train, val, test = load_static_splits(paths, include_test="test" in configured_split_names(config))
     x_train, time_train, event_train, _ = split_xy(train)
     x_val, time_val, event_val, _ = split_xy(val)
     time_train, event_train = cap_survival_targets(time_train, event_train, max_horizon_days)
@@ -389,12 +401,14 @@ def train_deephit(config, logger):
         "horizon_times": horizon_times,
         "splits": {},
     }
+    save_predictions_flag = should_save_predictions(config)
+    save_test_survival_flag = should_save_test_survival_curves(config)
     predictions = []
     antolini_rows = []
     weighted_rows = []
     train_time_values = time_train.to_numpy(dtype=float)
     train_event_values = event_train.to_numpy(dtype=int)
-    for split_name, split_df in {"train": train, "validation": val, "test": test}.items():
+    for split_name, split_df in configured_split_frames(config, train, val, test).items():
         preds, surv, split_metrics, time_values, event_values = _predict(
             model,
             split_df,
@@ -406,7 +420,8 @@ def train_deephit(config, logger):
             train_event_values,
         )
         preds["split"] = split_name
-        predictions.append(preds)
+        if save_predictions_flag:
+            predictions.append(preds)
         metrics["splits"][split_name] = split_metrics
         antolini, weighted = survival_time_dependent_metrics(
             split_name,
@@ -427,10 +442,11 @@ def train_deephit(config, logger):
             split_name,
             split_metrics["harrell_c_index_final_risk"],
         )
-        if split_name == "test":
+        if split_name == "test" and save_test_survival_flag:
             surv.to_csv(Path(paths["predictions_dir"]) / "deephit_test_survival_curves.csv")
 
-    pd.concat(predictions, ignore_index=True).to_parquet(Path(paths["predictions_dir"]) / "deephit_predictions.parquet", index=False)
+    if predictions:
+        pd.concat(predictions, ignore_index=True).to_parquet(Path(paths["predictions_dir"]) / "deephit_predictions.parquet", index=False)
     weighted_path = Path(config.get("evaluation", {}).get("weighted_c_index_path", metrics_dir / "deephit_weighted_c_index_by_horizon.csv"))
     antolini_path = Path(config.get("evaluation", {}).get("antolini_ctd_path", metrics_dir / "deephit_antolini_ctd.csv"))
     weighted_path.parent.mkdir(parents=True, exist_ok=True)

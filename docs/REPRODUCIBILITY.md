@@ -96,6 +96,82 @@ python scripts/run_static_pipeline.py --config configs/static_pipeline.yaml
 Kaplan-Meier, CoxPH, DeepSurv, PCHazard and DeepHit, then runs the configured
 evaluation consolidation.
 
+## Static Hyperparameter Tuning
+
+The static tuning config is:
+
+- `configs/static_tuning.yaml`
+
+It defines small validation-only grids for CoxPH, DeepSurv, PCHazard and
+DeepHit. The tuning objective is:
+
+- primary: validation `ctd_antolini` maximized;
+- tie-breaker: validation `ibll`/`nbll` minimized;
+- additional logged metrics: validation `ibs` and
+  `mean_horizon_c_index`.
+
+The CoxPH tuning grid includes ridge penalties
+`penalizer: [0.0, 0.001, 0.01, 0.1]` with `l1_ratio: [0.0]`. The unpenalized
+and weakly penalized candidates are included for comparison, but convergence
+warnings should be treated as evidence against a candidate if validation
+metrics degrade.
+
+The fixed evaluation protocol remains:
+
+```yaml
+evaluation_time_grid: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+horizon_times: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+```
+
+Plan tuning runs without training:
+
+```bash
+python scripts/tune_static_models.py --config configs/static_tuning.yaml --dry-run
+```
+
+Run validation-only tuning:
+
+```bash
+python scripts/tune_static_models.py --config configs/static_tuning.yaml
+```
+
+Tune a subset of models:
+
+```bash
+python scripts/tune_static_models.py --config configs/static_tuning.yaml --models coxph deephit
+```
+
+Tuning outputs are written under:
+
+- `outputs/tuning/{model}/`
+
+Each completed tuning run saves a config snapshot, validation metrics and a
+model-level `best_hyperparameters.json`. Tuning configurations evaluate only
+train and validation splits and do not load or score the test split.
+
+## Final Static Seed Runs
+
+After tuning has produced `best_hyperparameters.json` for each selected model,
+run final static evaluation with exactly seeds `42`, `123` and `2026`:
+
+```bash
+python scripts/run_final_static_seeds.py --config configs/static_tuning.yaml
+```
+
+Run a subset of final models:
+
+```bash
+python scripts/run_final_static_seeds.py --config configs/static_tuning.yaml --models deephit pchazard
+```
+
+Final outputs are written under:
+
+- `outputs/final_static/{model}/seed_{seed}/`
+
+Final runs use the selected validation hyperparameters and may record test
+metrics. Large model/checkpoint artifacts are disabled by default unless
+explicitly enabled in `configs/static_tuning.yaml`.
+
 ## Evaluation
 
 The static evaluation config is:
