@@ -11,6 +11,7 @@ outputs/preprocessors/
 outputs/tuning/
 outputs/final_static/
 outputs/diagnostics/
+outputs/static_72h/
 !outputs/models/.gitkeep
 !outputs/checkpoints/.gitkeep
 !outputs/metrics/.gitkeep

@@ -524,3 +524,68 @@ Related history: not yet consolidated
 
 ### Follow-up
 - [ ] Re-run CoxPH validation-only tuning with the expanded grid.
+
+## DEC-009 — Separate 72-hour static pycox benchmark pipeline
+
+Date: 2026-06-11
+Status: accepted
+Scope: data | model | evaluation
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The main TFG methodology has been reformulated around a fixed prediction
+  time at 72 hours after ICU admission.
+- The previous static pipeline uses the full static cohort and targets measured
+  from admission, so its results are not directly comparable with a dynamic
+  72-hour experiment.
+- The DySurv static MIMIC-IV notebook uses library models and pycox evaluation,
+  but it also drops long survivors and uses a weak/non-reproducible split.
+
+### Decision
+- Preserve the existing static pipeline unchanged.
+- Add a new isolated experimental layer named `static_72h_pycox`.
+- Build a new static cohort with inclusion rule `Y_i > 72h`.
+- Define targets relative to the 72-hour prediction time:
+  `duration_rel_days = Y_i - 72h`, capped at 10 days for evaluation.
+- Treat patients without event within 10 days after hour 72 as censored at the
+  10-day horizon; do not remove long survivors.
+- Use library implementations where possible: lifelines Kaplan-Meier/CoxPH and
+  pycox CoxPH, LogisticHazard, PCHazard and DeepHitSingle.
+- Select hyperparameters only on validation metrics, then run final evaluation
+  with exactly seeds `42`, `123` and `2026`.
+
+### Reason
+- This matches the new prospective question: among patients still observable at
+  72 hours, predict risk over the next 10 days.
+- Keeping the new code and outputs isolated prevents overwriting the previous
+  audited static benchmark.
+- Using pycox/lifelines improves reproducibility and reduces risk from custom
+  survival-model implementations.
+
+### Consequences
+- New configs use the `static_72h_` prefix.
+- New outputs are placed under `outputs/static_72h/`.
+- Final static-vs-dynamic claims should use this 72-hour cohort once dynamic
+  models are implemented on the same split and target definition.
+- Previous static results remain useful only as historical/comparison material,
+  not as the primary comparator for the new 72-hour dynamic experiment.
+
+### Related files
+- TFG/Nueva_version_experimento.md
+- configs/static_72h_data.yaml
+- configs/static_72h_tuning.yaml
+- configs/static_72h_evaluation.yaml
+- scripts/build_static_72h_data.py
+- scripts/tune_static_72h_models.py
+- scripts/run_final_static_72h_seeds.py
+- scripts/evaluate_static_72h_models.py
+- src/data/static_72h_dataset.py
+- src/models/static_72h_pycox.py
+- src/evaluation/static_72h_metrics.py
+
+### Follow-up
+- [ ] Run the full `static_72h_pycox` data build on real MIMIC-derived inputs.
+- [ ] Run validation-only tuning for the 72-hour static models.
+- [ ] Run final 3-seed evaluation for the selected 72-hour static models.
+- [ ] Implement dynamic models on the same 72-hour cohort and split.

@@ -277,3 +277,233 @@ C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -c "import copy; from path
 ### Follow-up
 - [ ] Re-run CoxPH validation-only tuning with
       `penalizer: [0.0, 0.001, 0.01, 0.1]` before Lightning AI final runs.
+
+## EXP-006 — Final static seed runs for DeepHit, DeepSurv and PCHazard
+
+Date: 2026-06-09
+Status: completed
+Model: DeepHit, DeepSurv, PCHazard
+Dataset: static MIMIC-IV adult ICU static dataset
+Config: `configs/static_tuning.yaml`
+Seed: 42, 123, 2026
+Run directory: `outputs/final_static/`
+Related decision: DEC-007
+
+### Goal
+- Summarize the completed three-seed final static evaluation for the three
+  neural/static curve-producing models with validation-selected
+  hyperparameters.
+
+### Command
+```bash
+python scripts/run_final_static_seeds.py --config configs/static_tuning.yaml --models deephit deepsurv pchazard
+```
+
+### Inputs
+- Dataset path: `data/processed/static/`
+- Train split: `data/processed/static/train_static.parquet`
+- Validation split: `data/processed/static/val_static.parquet`
+- Test split: `data/processed/static/test_static.parquet`
+- Tuning selections:
+  `outputs/tuning/deephit/best_hyperparameters.json`,
+  `outputs/tuning/deepsurv/best_hyperparameters.json`,
+  `outputs/tuning/pchazard/best_hyperparameters.json`
+
+### Outputs
+- DeepHit summary: `outputs/final_static/deephit/final_seed_results.csv`
+- DeepSurv summary: `outputs/final_static/deepsurv/final_seed_results.csv`
+- PCHazard summary: `outputs/final_static/pchazard/final_seed_results.csv`
+- Per-seed metrics:
+  `outputs/final_static/{model}/seed_{seed}/metrics/{model}/{model}_metrics.json`
+
+### Selected Hyperparameters
+- DeepHit: `shared_layers=[128, 64]`, `cause_layers=[64]`,
+  `dropout=0.1`, `learning_rate=0.0005`, `alpha=1.0`, `beta=0.5`,
+  `gamma=0.0`, `ranking_sigma=0.1`, `include_tail_category=true`.
+- DeepSurv: `hidden_layers=[128, 64]`, `dropout=0.1`,
+  `learning_rate=0.0001`, `weight_decay=0.001`.
+- PCHazard: `hidden_layers=[128, 64]`, `dropout=0.3`,
+  `learning_rate=0.0005`.
+
+### Results
+Mean test metrics across seeds:
+
+| Model | Test Ctd/Harrell | Test mean C-index@h | Test IBS | Test IBLL/NBLL |
+| --- | ---: | ---: | ---: | ---: |
+| DeepHit | 0.7690 | 0.7490 | 0.1104 | 0.3526 |
+| DeepSurv | 0.7615 | 0.7463 | 0.1110 | 0.3560 |
+| PCHazard | 0.7688 | 0.7491 | 0.1095 | 0.3507 |
+
+Standard deviations across seeds:
+
+| Model | Ctd sd | Mean C-index@h sd | IBS sd | IBLL sd |
+| --- | ---: | ---: | ---: | ---: |
+| DeepHit | 0.0017 | 0.0013 | 0.0002 | 0.0011 |
+| DeepSurv | 0.0008 | 0.0004 | 0.0005 | 0.0013 |
+| PCHazard | 0.0014 | 0.0005 | 0.0002 | 0.0008 |
+
+### Interpretation
+- DeepHit has the highest mean test Ctd by a very small margin over PCHazard.
+- PCHazard has the best calibration/error metrics, with the lowest mean test
+  IBS and IBLL/NBLL.
+- DeepSurv remains stable but is below the two curve-discrete models on mean
+  test Ctd and calibration metrics.
+- Differences between DeepHit and PCHazard are small, so final claims should be
+  cautious unless supported by uncertainty intervals or additional diagnostics.
+
+### Follow-up
+- [ ] Complete CoxPH tuning/final-seed evaluation before calling this the final
+      complete static benchmark.
+- [ ] Consolidate final static metrics into one comparison artifact/table.
+
+## EXP-007 — Complete final static seed comparison including CoxPH
+
+Date: 2026-06-09
+Status: completed
+Model: CoxPH, DeepHit, DeepSurv, PCHazard
+Dataset: static MIMIC-IV adult ICU static dataset
+Config: `configs/static_tuning.yaml`
+Seed: 42, 123, 2026
+Run directory: `outputs/final_static/`
+Related decisions: DEC-007, DEC-008
+
+### Goal
+- Add CoxPH final-seed results to the static benchmark and compare all four
+  tuned static models under the common fixed grid protocol.
+
+### Command
+```bash
+python scripts/run_final_static_seeds.py --config configs/static_tuning.yaml --models coxph deephit deepsurv pchazard
+```
+
+### Inputs
+- Dataset path: `data/processed/static/`
+- Train split: `data/processed/static/train_static.parquet`
+- Validation split: `data/processed/static/val_static.parquet`
+- Test split: `data/processed/static/test_static.parquet`
+- Tuning selections:
+  `outputs/tuning/coxph/best_hyperparameters.json`,
+  `outputs/tuning/deephit/best_hyperparameters.json`,
+  `outputs/tuning/deepsurv/best_hyperparameters.json`,
+  `outputs/tuning/pchazard/best_hyperparameters.json`
+
+### Outputs
+- CoxPH summary: `outputs/final_static/coxph/final_seed_results.csv`
+- DeepHit summary: `outputs/final_static/deephit/final_seed_results.csv`
+- DeepSurv summary: `outputs/final_static/deepsurv/final_seed_results.csv`
+- PCHazard summary: `outputs/final_static/pchazard/final_seed_results.csv`
+- Per-seed metrics:
+  `outputs/final_static/{model}/seed_{seed}/metrics/{model}/{model}_metrics.json`
+
+### Selected Hyperparameters
+- CoxPH: `penalizer=0.1`, `l1_ratio=0.0`.
+- DeepHit: `shared_layers=[128, 64]`, `cause_layers=[64]`,
+  `dropout=0.1`, `learning_rate=0.0005`, `alpha=1.0`, `beta=0.5`,
+  `gamma=0.0`, `ranking_sigma=0.1`, `include_tail_category=true`.
+- DeepSurv: `hidden_layers=[128, 64]`, `dropout=0.1`,
+  `learning_rate=0.0001`, `weight_decay=0.001`.
+- PCHazard: `hidden_layers=[128, 64]`, `dropout=0.3`,
+  `learning_rate=0.0005`.
+
+### Results
+Mean test metrics across seeds:
+
+| Model | Test Harrell/Ctd | Test mean C-index@h | Test IBS | Test IBLL/NBLL |
+| --- | ---: | ---: | ---: | ---: |
+| CoxPH | 0.7411 | 0.7266 | 0.1147 | 0.3693 |
+| DeepHit | 0.7690 | 0.7490 | 0.1104 | 0.3526 |
+| DeepSurv | 0.7615 | 0.7463 | 0.1110 | 0.3560 |
+| PCHazard | 0.7688 | 0.7491 | 0.1095 | 0.3507 |
+
+Standard deviations across seeds:
+
+| Model | Harrell/Ctd sd | Mean C-index@h sd | IBS sd | IBLL sd |
+| --- | ---: | ---: | ---: | ---: |
+| CoxPH | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| DeepHit | 0.0017 | 0.0013 | 0.0002 | 0.0011 |
+| DeepSurv | 0.0008 | 0.0004 | 0.0005 | 0.0013 |
+| PCHazard | 0.0014 | 0.0005 | 0.0002 | 0.0008 |
+
+### Interpretation
+- CoxPH now matches the previously stable benchmark after validation tuning
+  selected the stronger penalization `penalizer=0.1`.
+- DeepSurv improves over CoxPH in all reported test metrics, supporting the
+  value of a nonlinear proportional-risk representation over the linear Cox
+  baseline.
+- DeepHit and PCHazard form the strongest static pair. DeepHit has the highest
+  mean test Ctd by a negligible margin, while PCHazard has the best mean
+  horizon C-index and the lowest IBS and IBLL/NBLL.
+- The model ranking should be reported cautiously because DeepHit and PCHazard
+  are separated by very small absolute differences.
+- CoxPH has zero seed variation because this fitted Cox model is deterministic
+  once the selected hyperparameters and data split are fixed.
+
+### Follow-up
+- [ ] Consolidate final static metrics into one comparison artifact/table.
+- [ ] Compare the completed static benchmark with dynamic survival models once
+      the dynamic pipeline scope is finalized.
+
+## EXP-008 — Thesis-ready final static tables and figures
+
+Date: 2026-06-10
+Status: completed
+Model: CoxPH, DeepSurv, PCHazard, DeepHit
+Dataset: static MIMIC-IV adult ICU static dataset
+Source run directory: `outputs/final_static/`
+Output tables directory: `outputs/thesis_tables/static/`
+Output figures directory: `outputs/figures/static/`
+Related decisions: DEC-007, DEC-008
+
+### Goal
+- Generate clean thesis-ready static result tables, a regenerated final static
+  comparison CSV and compact figures from final static seed outputs only.
+
+### Command
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe - <inline metrics/figures generation script>
+```
+
+### Inputs
+- Final per-model summaries:
+  `outputs/final_static/{coxph,deepsurv,pchazard,deephit}/final_seed_results.csv`
+- Final per-model seed summaries:
+  `outputs/final_static/{coxph,deepsurv,pchazard,deephit}/final_seed_summary.json`
+- Final per-seed metric JSONs:
+  `outputs/final_static/{model}/seed_{seed}/metrics/{model}/{model}_metrics.json`
+- Validation-selected hyperparameters:
+  `outputs/tuning/{model}/best_hyperparameters.json`
+
+### Outputs
+- Consolidated final metrics:
+  `outputs/metrics/final_static_model_comparison.csv`
+- Thesis tables:
+  `outputs/thesis_tables/static/static_final_test_comparison.{csv,tex}`,
+  `outputs/thesis_tables/static/static_horizon_c_index.{csv,tex}`,
+  `outputs/thesis_tables/static/static_probabilistic_metrics.{csv,tex}`,
+  `outputs/thesis_tables/static/static_selected_hyperparameters.{csv,tex}`,
+  `outputs/thesis_tables/static/static_per_seed_results.{csv,tex}`
+- Thesis figures:
+  `outputs/figures/static/static_ctd_antolini_comparison.png`,
+  `outputs/figures/static/static_ibs_comparison.png`,
+  `outputs/figures/static/static_ibll_nbll_comparison.png`,
+  `outputs/figures/static/static_horizon_c_index.png`,
+  `outputs/figures/static/static_discrimination_vs_calibration_summary.png`
+
+### Validation
+- Confirmed DeepHit selected hyperparameters include
+  `include_tail_category=true`.
+- Confirmed final DeepHit IBS is in the corrected range near 0.1104, not the
+  old pre-tail audit value near 0.40.
+- Confirmed CoxPH test standard deviation is zero across final seeds, matching
+  deterministic behavior.
+- Confirmed non-applicable scalar Harrell metrics are left empty/NA for
+  curve-based final comparison rows.
+- Did not use stale `outputs/metrics/static_model_comparison.csv` as source.
+
+### Notes
+- Kaplan-Meier remains descriptive only and is not included in predictive final
+  comparison tables.
+- Individual survival-curve examples were not generated because the available
+  curve CSVs are matrix-style prediction artifacts without clinically
+  interpretable patient identifiers; such a figure would be arbitrary for the
+  main memory.

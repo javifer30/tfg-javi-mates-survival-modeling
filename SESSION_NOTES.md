@@ -1024,3 +1024,459 @@ Lightning AI.
   current CoxPH `best_hyperparameters.json` from the partial smoke run is not
   safe to reuse.
 - Re-run CoxPH tuning with the expanded grid before any final static seed run.
+
+## 2026-06-09 — Final Static Three-Seed Results Review
+
+### Purpose
+
+Analyze existing tuning and final-seed artifacts for DeepHit, DeepSurv and
+PCHazard without running additional training or modifying model logic.
+
+### Scope
+
+- Inspected `outputs/tuning/{deephit,deepsurv,pchazard}/`.
+- Inspected `outputs/final_static/{deephit,deepsurv,pchazard}/`.
+- Ignored CoxPH for this summary because the CoxPH tuning/final seed sequence
+  remains pending after the smoke-test regression investigation.
+
+### Selected Configurations
+
+- DeepHit selected `deephit_cfg_013`: `shared_layers=[128, 64]`,
+  `cause_layers=[64]`, `dropout=0.1`, `learning_rate=0.0005`,
+  `alpha=1.0`, `beta=0.5`, `gamma=0.0`, `ranking_sigma=0.1`,
+  `include_tail_category=true`.
+- DeepSurv selected `deepsurv_cfg_018`: `hidden_layers=[128, 64]`,
+  `dropout=0.1`, `learning_rate=0.0001`, `weight_decay=0.001`.
+- PCHazard selected `pchazard_cfg_011`: `hidden_layers=[128, 64]`,
+  `dropout=0.3`, `learning_rate=0.0005`.
+
+### Main Results
+
+- DeepHit mean test Ctd: 0.7690; mean horizon C-index: 0.7490; IBS: 0.1104;
+  IBLL/NBLL: 0.3526.
+- DeepSurv mean test Ctd/Harrell: 0.7615; mean horizon C-index: 0.7463;
+  IBS: 0.1110; IBLL/NBLL: 0.3560.
+- PCHazard mean test Ctd: 0.7688; mean horizon C-index: 0.7491; IBS: 0.1095;
+  IBLL/NBLL: 0.3507.
+
+### Interpretation
+
+- DeepHit and PCHazard are nearly tied in discrimination, with DeepHit slightly
+  higher in mean test Ctd and PCHazard slightly higher in mean horizon C-index.
+- PCHazard has the best calibration/error profile by IBS and IBLL/NBLL.
+- DeepSurv remains stable and competitive, but trails the two curve-discrete
+  models after tuning.
+- The three-seed variability is small for all three models, so the ranking is
+  not driven by a single anomalous seed.
+
+### Documentation Updates
+
+- Added `EXP-006` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/TODO.md` to record the completed three-model analysis and keep
+  CoxPH/final static consolidation open.
+- No new methodological decision was made, so `docs/DECISIONS.md` was not
+  updated.
+- No commands or execution steps changed, so `docs/REPRODUCIBILITY.md` was not
+  updated.
+
+## 2026-06-09 — Complete Final Static Results Including CoxPH
+
+### Purpose
+
+Add the newly available CoxPH tuning/final-seed outputs to the static model
+comparison and refresh the academic interpretation across CoxPH, DeepHit,
+DeepSurv and PCHazard.
+
+### Scope
+
+- Inspected `outputs/tuning/{coxph,deephit,deepsurv,pchazard}/`.
+- Inspected `outputs/final_static/{coxph,deephit,deepsurv,pchazard}/`.
+- Did not run additional training and did not modify model logic or configs.
+
+### Selected Configurations
+
+- CoxPH selected `coxph_cfg_003`: `penalizer=0.1`, `l1_ratio=0.0`.
+- DeepHit selected `deephit_cfg_013`: `shared_layers=[128, 64]`,
+  `cause_layers=[64]`, `dropout=0.1`, `learning_rate=0.0005`,
+  `alpha=1.0`, `beta=0.5`, `gamma=0.0`, `ranking_sigma=0.1`,
+  `include_tail_category=true`.
+- DeepSurv selected `deepsurv_cfg_018`: `hidden_layers=[128, 64]`,
+  `dropout=0.1`, `learning_rate=0.0001`, `weight_decay=0.001`.
+- PCHazard selected `pchazard_cfg_011`: `hidden_layers=[128, 64]`,
+  `dropout=0.3`, `learning_rate=0.0005`.
+
+### Main Results
+
+- CoxPH mean test Harrell/Ctd: 0.7411; mean horizon C-index: 0.7266;
+  IBS: 0.1147; IBLL/NBLL: 0.3693.
+- DeepHit mean test Ctd: 0.7690; mean horizon C-index: 0.7490; IBS: 0.1104;
+  IBLL/NBLL: 0.3526.
+- DeepSurv mean test Harrell/Ctd: 0.7615; mean horizon C-index: 0.7463;
+  IBS: 0.1110; IBLL/NBLL: 0.3560.
+- PCHazard mean test Ctd: 0.7688; mean horizon C-index: 0.7491;
+  IBS: 0.1095; IBLL/NBLL: 0.3507.
+
+### Interpretation
+
+- CoxPH now reproduces the previous stable benchmark after full-grid tuning
+  selected `penalizer=0.1`.
+- All neural/static models improve over CoxPH, especially on Ctd and
+  calibration-style curve metrics.
+- PCHazard has the best IBS and IBLL/NBLL, while DeepHit and PCHazard are
+  essentially tied on discrimination.
+- DeepSurv provides a stable nonlinear proportional-risk baseline between
+  CoxPH and the two curve-discrete models.
+
+### Documentation Updates
+
+- Added `EXP-007` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/TODO.md` to mark CoxPH tuning/final-seed and the four-model
+  static comparison as completed.
+- No new methodological decision was made, so `docs/DECISIONS.md` was not
+  updated.
+- No execution commands changed, so `docs/REPRODUCIBILITY.md` was not updated.
+
+## 2026-06-09 — End of Day Session Close
+
+### Purpose
+
+Close the session for the day and preserve handoff context for the next working
+session.
+
+### Current State
+
+- Final static three-seed results have been reviewed for CoxPH, DeepHit,
+  DeepSurv and PCHazard.
+- The four-model static comparison is now documented in
+  `docs/EXPERIMENT_LOG.md` and reflected in `docs/TODO.md`.
+- DeepHit tail-support/ranking-loss/censoring fixes are already documented as
+  completed, with remaining diagnostic tasks still open.
+- Dynamic DySurv/landmark scope remains blocked until a thesis-scope decision
+  is made.
+
+### Next Recommended Actions
+
+- Consolidate final static results into thesis-ready tables/figures or
+  `outputs/metrics/static_model_comparison.csv` if not already generated.
+- Complete remaining DeepHit diagnostics: original-paper assumption comparison,
+  calibration plots, PCHazard curve comparison and synthetic overfit test.
+- Decide whether the thesis still requires a full dynamic landmark/DySurv
+  pipeline.
+
+### Documentation Status
+
+- Reviewed `AGENTS.md`, `SESSION_NOTES.md` and `docs/TODO.md`.
+- No code, configs, models, data, outputs, notebooks or checkpoints were
+  modified during this close-out.
+- No experiment was run during this close-out.
+
+## 2026-06-10 — Metrics Agent Static Results Package
+
+### Purpose
+
+Prepare a structured final static results package for handoff to the MEMORY
+WRITER agent.
+
+### Scope
+
+- Inspected documentation state in `docs/DECISIONS.md`,
+  `docs/EXPERIMENT_LOG.md`, `docs/REPRODUCIBILITY.md`, `docs/TODO.md` and
+  `SESSION_NOTES.md`.
+- Inspected final static artifacts under
+  `outputs/tuning/{coxph,deepsurv,pchazard,deephit}/` and
+  `outputs/final_static/{coxph,deepsurv,pchazard,deephit}/`.
+- Checked descriptive Kaplan-Meier outputs and dataset summary under
+  `outputs/metrics/`.
+- Did not run training, tuning or evaluation consolidation.
+
+### Findings
+
+- CoxPH, DeepSurv, PCHazard and DeepHit all have tuning results, selected
+  hyperparameters, final seed summaries, final seed CSVs and per-seed metric
+  JSONs for seeds 42, 123 and 2026.
+- Kaplan-Meier has descriptive cohort metrics and a survival-curve figure, but
+  remains descriptive only.
+- `outputs/metrics/static_model_comparison.csv` exists but contains older
+  static-pipeline results, including old DeepHit metrics before the final
+  corrected/tuned DeepHit run; it should not be used as the final static table
+  unless regenerated from `outputs/final_static/`.
+- The current `configs/static_tuning.yaml` CoxPH grid differs from an older
+  documentation note: local tuning results correspond to six CoxPH ridge
+  candidates and selected `penalizer=0.1`.
+
+### Documentation Updates
+
+- Appended this session note only.
+- No experiment was run, so `docs/EXPERIMENT_LOG.md` was not updated.
+- No methodology changed, so `docs/DECISIONS.md` and
+  `docs/REPRODUCIBILITY.md` were not updated.
+- No priority changed, so `docs/TODO.md` was not updated.
+
+## 2026-06-10 — DeepSurv Audit Review
+
+### Purpose
+
+Audit the current TFG DeepSurv implementation against the original DeepSurv
+paper, the local reference implementation, current project methodology and
+available tuning/final static artifacts.
+
+### Scope
+
+- Inspected `src/models_references/DeepSurv/`,
+  `src/models/deepsurv_tfg.py`, `configs/deepsurv.yaml`,
+  `configs/static_tuning.yaml`, shared static/evaluation utilities, relevant
+  tests and DeepSurv-specific tuning/final/metrics artifacts.
+- Avoided full `data/`, full `outputs/`, checkpoints and raw prediction scans.
+- Ran small read-only checks for Cox partial likelihood consistency and final
+  DeepSurv survival-curve range/monotonicity.
+
+### Findings
+
+- The adapted DeepSurv model preserves the core Cox neural-risk formulation:
+  static covariates to scalar log-risk, trained with Cox partial likelihood.
+- Censoring is handled correctly inside the partial likelihood; censored rows
+  contribute to risk sets but not event terms.
+- The main caveat is minibatch training of the Cox partial likelihood, which is
+  an approximation to the full risk-set likelihood used by the original
+  reference implementation and should be documented.
+- Survival curves are reconstructed using a Breslow baseline cumulative hazard
+  estimated on the capped train split; final seed-42 curves were monotone and
+  within `[0, 1]`.
+- Tuning artifacts show validation-only selection with no test metrics recorded;
+  final artifacts use seeds `42`, `123` and `2026`.
+
+### Validation
+
+- Ran a small manual Cox-loss check with `tfg-survival`; corrected manual value
+  matched implementation within numerical tolerance.
+- Ran a read-only monotonicity/range check on
+  `outputs/final_static/deepsurv/seed_42/predictions/deepsurv_test_survival_curves.csv`.
+- No code, configs, model artifacts, generated outputs or checkpoints were
+  modified.
+
+## 2026-06-10 — Static Thesis Tables And Figures Generation
+
+### Purpose
+
+Generate thesis-ready static result tables, a clean final static comparison
+artifact and static model figures from final static outputs only.
+
+### Scope
+
+- Used `outputs/final_static/{coxph,deepsurv,pchazard,deephit}/` as the source
+  of truth.
+- Used `outputs/tuning/{model}/best_hyperparameters.json` only to populate the
+  selected-hyperparameter table.
+- Did not retrain models, rerun tuning or modify model code/configs.
+- Did not use stale `outputs/metrics/static_model_comparison.csv`.
+
+### Outputs Created
+
+- `outputs/metrics/final_static_model_comparison.csv`.
+- `outputs/thesis_tables/static/static_final_test_comparison.{csv,tex}`.
+- `outputs/thesis_tables/static/static_horizon_c_index.{csv,tex}`.
+- `outputs/thesis_tables/static/static_probabilistic_metrics.{csv,tex}`.
+- `outputs/thesis_tables/static/static_selected_hyperparameters.{csv,tex}`.
+- `outputs/thesis_tables/static/static_per_seed_results.{csv,tex}`.
+- `outputs/figures/static/static_ctd_antolini_comparison.png`.
+- `outputs/figures/static/static_ibs_comparison.png`.
+- `outputs/figures/static/static_ibll_nbll_comparison.png`.
+- `outputs/figures/static/static_horizon_c_index.png`.
+- `outputs/figures/static/static_discrimination_vs_calibration_summary.png`.
+
+### Validation
+
+- Confirmed DeepHit final table uses corrected tail-support selection
+  `include_tail_category=true`.
+- Confirmed final DeepHit IBS is near 0.1104, excluding the old pre-tail audit
+  result.
+- Confirmed CoxPH deterministic final seeds give zero standard deviation.
+- Confirmed non-applicable scalar metrics are empty/NA in the consolidated CSV.
+
+### Documentation Updates
+
+- Added `EXP-008` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/TODO.md` to mark final static table/figure consolidation as
+  completed.
+- No methodology or execution instructions changed, so `docs/DECISIONS.md` and
+  `docs/REPRODUCIBILITY.md` were not updated.
+
+## 2026-06-10 — Static Survival Curve Example Feasibility Check
+
+### Purpose
+
+Check whether final PCHazard and DeepHit prediction artifacts allow rigorous
+selection of individual test patients for example survival-curve figures
+without rerunning prediction.
+
+### Findings
+
+- `outputs/final_static/pchazard/seed_42/predictions/pchazard_predictions.parquet`
+  and
+  `outputs/final_static/deephit/seed_42/predictions/deephit_predictions.parquet`
+  contain `patientunitstayid`, `time_to_event`, `observed_event`, `split` and
+  `risk_score`.
+- Filtering `split == "test"` gives 18,701 rows for both models, matching
+  `data/processed/static/test_static.parquet`.
+- The test prediction row order exactly matches `test_static.parquet`, and the
+  survival-curve CSV columns `0` to `18700` correspond to that same test order.
+- PCHazard `risk_score` matches `1 - S(10)` from the curve CSV up to numerical
+  tolerance; DeepHit `risk_score` exactly matches `1 - survival_at_10.00d`.
+- Therefore, example survival curves can be selected reproducibly by risk
+  percentile, event/censoring status and observed time without retraining or
+  regenerating predictions.
+
+### Documentation Updates
+
+- Appended this session note only.
+- No experiment, methodology or priority changed, so `docs/EXPERIMENT_LOG.md`,
+  `docs/DECISIONS.md`, `docs/REPRODUCIBILITY.md` and `docs/TODO.md` were not
+  updated.
+
+## 2026-06-10 — PCHazard vs DeepHit Example Survival Curves
+
+### Purpose
+
+Generate a thesis-ready example survival-curve figure comparing PCHazard and
+DeepHit for reproducibly selected test patients.
+
+### Selection Rule
+
+- Used final seed-42 test predictions from PCHazard and DeepHit.
+- Computed the average final risk score between both models for each test
+  patient.
+- Selected the patients closest to the 10th, 50th and 90th percentiles of the
+  average risk distribution.
+- Used the same selected patients and curve columns for both models.
+
+### Outputs Created
+
+- `outputs/figures/static/example_survival_curves_pchazard_deephit.png`.
+- `outputs/thesis_tables/static/example_survival_curve_patients.csv`.
+- `outputs/thesis_tables/static/example_survival_curve_patients.tex`.
+
+### Notes
+
+- The selected low-, medium- and high-risk examples are all censored cases under
+  the automatic percentile rule, so the figure should be described as a
+  risk-stratified prediction example rather than an event/censoring contrast.
+- No models were retrained and no predictions were regenerated.
+
+## 2026-06-10 — Event-Only PCHazard vs DeepHit Example Curves
+
+### Purpose
+
+Generate a companion survival-curve figure using only test patients with an
+observed event, so it can be compared against the risk-percentile example that
+selected censored patients.
+
+### Selection Rule
+
+- Filtered final seed-42 test predictions to `observed_event == 1`.
+- Computed the average final risk score between PCHazard and DeepHit.
+- Selected the event patients closest to the 10th, 50th and 90th percentiles of
+  average risk among event patients.
+- Regenerated both example-curve figures with a common y-axis range `[0, 1]`.
+
+### Outputs Created
+
+- `outputs/figures/static/example_event_survival_curves_pchazard_deephit.png`.
+- `outputs/thesis_tables/static/example_event_survival_curve_patients.csv`.
+- `outputs/thesis_tables/static/example_event_survival_curve_patients.tex`.
+
+### Notes
+
+- The event-only selection contains 2,228 eligible test event patients.
+- The selected examples have observed event times of approximately 3.95, 1.52
+  and 1.63 days for low-, medium- and high-risk event strata respectively.
+- No models were retrained and no predictions were regenerated.
+
+## 2026-06-11 — static_72h_pycox Pipeline Implementation
+
+### Purpose
+
+Implement a new isolated static pipeline for the revised 72-hour methodology
+without modifying or replacing the previous static pipeline.
+
+### Methodological Inputs Reviewed
+
+- `TFG/Nueva_version_experimento.md`.
+- `src/models_references/DySurv/Models/Results/Static Benchmarks MIMIC-IV.ipynb`.
+- Current repository instructions and static pipeline documentation.
+
+### Notebook Findings
+
+- The DySurv static notebook loads `preprocessed_labels.csv` and
+  `preprocessed_flat.csv`.
+- It multiplies `actualiculos` by 24, drops rows with `actualiculos > 240`,
+  drops `nullheight`, standardizes `age`, `height` and `weight`, leaves several
+  binary/one-hot columns unchanged, and evaluates with pycox `EvalSurv`.
+- It trains several pycox models, including LogisticHazard, DeepHitSingle,
+  neural CoxPH and PCHazard.
+- Its split logic is weak for the TFG setting and may overlap train/test
+  because validation is sampled again from the full label set.
+- It removes long survivors beyond the horizon, which is not used in the new
+  TFG methodology.
+
+### Changes Made
+
+- Added `configs/static_72h_data.yaml`.
+- Added `configs/static_72h_tuning.yaml`.
+- Added `configs/static_72h_evaluation.yaml`.
+- Added `scripts/build_static_72h_data.py`.
+- Added `scripts/tune_static_72h_models.py`.
+- Added `scripts/run_final_static_72h_seeds.py`.
+- Added `scripts/evaluate_static_72h_models.py`.
+- Added `src/data/static_72h_dataset.py`.
+- Added `src/evaluation/static_72h_metrics.py`.
+- Added `src/models/static_72h_pycox.py`.
+- Added `tests/test_static_72h_pipeline.py`.
+- Updated `.gitignore` to ignore generated `outputs/static_72h/`.
+
+### Implemented Models
+
+- Kaplan-Meier via lifelines.
+- CoxPH via lifelines.
+- DeepSurv-style neural CoxPH via pycox `CoxPH`.
+- LogisticHazard via pycox.
+- PCHazard via pycox.
+- DeepHitSingle via pycox.
+
+### Safeguards
+
+- New outputs are isolated under `outputs/static_72h/`.
+- New processed data are isolated under `data/processed/static_72h/`.
+- Tuning evaluates only train and validation splits and sets
+  `allow_test_metrics: false`.
+- Tuning catches failed candidates and records them as failed rather than
+  stopping the whole search.
+- Final evaluation enforces exactly seeds `42`, `123` and `2026`.
+- Preprocessing is fitted only on train and applied to validation/test.
+- Long survivors after the 10-day post-72h horizon are censored at 10 days,
+  not removed.
+
+### Validation
+
+- Ran
+  `C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_static_72h_pipeline.py`;
+  result: 4 passed.
+- Ran
+  `C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_static_72h_models.py --config configs/static_72h_tuning.yaml --models coxph deephit_single --dry-run --max-runs 3`;
+  result: planned isolated tuning runs under `outputs/static_72h/tuning/`.
+- Ran py_compile for the new modules/scripts; result: passed.
+- Ran help checks for final and evaluation scripts; result: CLIs loaded.
+- Ran `git diff --check`; result: no whitespace errors, only CRLF warnings.
+
+### Documentation Updates
+
+- Added `DEC-009` to `docs/DECISIONS.md`.
+- Updated `docs/REPRODUCIBILITY.md` with static_72h commands and outputs.
+- Updated `docs/TODO.md` with remaining static_72h execution tasks.
+- Did not update `docs/EXPERIMENT_LOG.md` because no real data build, tuning or
+  final model experiment was run.
+
+### Next Recommended Action
+
+Run `scripts/build_static_72h_data.py` on the real MIMIC-derived inputs, inspect
+the dataset summary, then launch validation-only tuning with `--dry-run` and a
+small `--max-runs` smoke before full tuning.

@@ -3,7 +3,7 @@
 Antes de modificar este repositorio, leer:
 
 ```text
-guidelines/TFG/CODEX_TFG_MATES_JAVI.md
+TFG/CODEX_TFG_MATES_JAVI.md
 ```
 
 Resumen operativo:

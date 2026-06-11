@@ -4,8 +4,8 @@ Example script demonstrating how to use the refactored modules.
 import numpy as np
 from src.data.data_loader import load_data
 from src.features.pwe_transformer import PWEDataExpander
-from src.models.deepsurv import DeepSurvNet, concordance_index
-from src.models.pwe_poisson import PWEPoisson, PWEDataset
+from basura.models.deepsurv import DeepSurvNet, concordance_index
+from basura.models.pwe_poisson import PWEPoisson, PWEDataset
 import torch
 
 

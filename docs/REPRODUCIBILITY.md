@@ -172,6 +172,98 @@ Final runs use the selected validation hyperparameters and may record test
 metrics. Large model/checkpoint artifacts are disabled by default unless
 explicitly enabled in `configs/static_tuning.yaml`.
 
+## Static 72h pycox Pipeline
+
+The new main-methodology static benchmark is isolated from the previous static
+pipeline under the name `static_72h_pycox`.
+
+Methodological definition:
+
+- include only stays with observed time `Y_i > 72h`;
+- prediction time is 72 hours after ICU admission;
+- target duration is relative to that prediction time;
+- horizon is 10 days after hour 72;
+- stays without event inside the 10-day post-72h horizon are censored at 10
+  days rather than removed.
+
+Build the 72-hour static dataset:
+
+```bash
+python scripts/build_static_72h_data.py --config configs/static_72h_data.yaml
+```
+
+Expected dataset outputs:
+
+- `data/processed/static_72h/train_static_72h.parquet`
+- `data/processed/static_72h/val_static_72h.parquet`
+- `data/processed/static_72h/test_static_72h.parquet`
+- `data/processed/static_72h/split_assignments.parquet`
+- `outputs/static_72h/preprocessors/static_72h_preprocessor.pkl`
+- `outputs/static_72h/metrics/static_72h_dataset_summary.json`
+
+Plan validation-only tuning without training:
+
+```bash
+python scripts/tune_static_72h_models.py --config configs/static_72h_tuning.yaml --dry-run
+```
+
+Run validation-only tuning:
+
+```bash
+python scripts/tune_static_72h_models.py --config configs/static_72h_tuning.yaml
+```
+
+Tune a subset or cap runs for smoke testing:
+
+```bash
+python scripts/tune_static_72h_models.py --config configs/static_72h_tuning.yaml --models coxph deephit_single --max-runs 3
+```
+
+Tuning outputs:
+
+- `outputs/static_72h/tuning/{model}/tuning_results.csv`
+- `outputs/static_72h/tuning/{model}/best_hyperparameters.json`
+
+Run final 3-seed evaluation after tuning:
+
+```bash
+python scripts/run_final_static_72h_seeds.py --config configs/static_72h_tuning.yaml
+```
+
+Run a subset of final models:
+
+```bash
+python scripts/run_final_static_72h_seeds.py --config configs/static_72h_tuning.yaml --models logistic_hazard deephit_single
+```
+
+Final outputs:
+
+- `outputs/static_72h/final/{model}/seed_42/`
+- `outputs/static_72h/final/{model}/seed_123/`
+- `outputs/static_72h/final/{model}/seed_2026/`
+- `outputs/static_72h/final/{model}/final_seed_results.csv`
+- `outputs/static_72h/final/{model}/final_seed_summary.json`
+- `outputs/static_72h/final/static_72h_model_comparison.csv`
+
+Regenerate the final comparison table without retraining:
+
+```bash
+python scripts/evaluate_static_72h_models.py --config configs/static_72h_evaluation.yaml
+```
+
+The 72-hour static models currently implemented are:
+
+- Kaplan-Meier via lifelines;
+- CoxPH via lifelines;
+- DeepSurv-style neural CoxPH via pycox `CoxPH`;
+- LogisticHazard via pycox;
+- PCHazard via pycox;
+- DeepHitSingle via pycox.
+
+The main 72-hour metrics are Antolini Ctd, IBS and IBLL/NBLL from pycox
+`EvalSurv`, plus the project extension C-index by horizon for days 1 through
+10.
+
 ## Evaluation
 
 The static evaluation config is:

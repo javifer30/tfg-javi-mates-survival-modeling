@@ -26,7 +26,7 @@ models:
   coxph:
     base_config: configs/coxph.yaml
     grid:
-      penalizer: [0.0, 0.001, 0.01, 0.1]
+      penalizer: [ 0.001, 0.01, 0.1, 0.2, 0.5, 1.0]
       l1_ratio: [0.0]
 
   deepsurv:
@@ -34,17 +34,19 @@ models:
     grid:
       hidden_layers:
         - [64, 32]
-      dropout: [0.1]
-      learning_rate: [0.001]
+        - [128, 64]
+      dropout: [0.1, 0.3]
+      learning_rate: [0.001, 0.0005, 0.0001]
       weight_decay: [0.0001, 0.001]
 
   pchazard:
     base_config: configs/pchazard.yaml
     grid:
       hidden_layers:
+        - [64, 32]
         - [128, 64]
-      dropout: [0.1]
-      learning_rate: [0.001, 0.0005]
+      dropout: [0.1, 0.3]
+      learning_rate: [0.001, 0.0005, 0.0001]
 
   deephit:
     base_config: configs/deephit.yaml
@@ -53,10 +55,10 @@ models:
         - [128, 64]
       cause_layers:
         - [64]
-      dropout: [0.1]
-      learning_rate: [0.001]
+      dropout: [0.1, 0.3]
+      learning_rate: [0.001, 0.0005]
       alpha: [1.0]
       beta: [1.0, 0.5]
-      gamma: [0.0]
-      ranking_sigma: [0.1]
+      gamma: [0.0, 0.1]
+      ranking_sigma: [0.1, 0.5]
       include_tail_category: [true]

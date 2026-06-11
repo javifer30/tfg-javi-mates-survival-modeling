@@ -1,0 +1,5 @@
+Model,Test IBS,Test IBLL/NBLL,Interpretation
+CoxPH,0.1147 ± 0.0000,0.3693 ± 0.0000,Lower is better; curve quality / probabilistic calibration.
+DeepSurv,0.1110 ± 0.0005,0.3560 ± 0.0013,Lower is better; curve quality / probabilistic calibration.
+PCHazard,0.1095 ± 0.0002,0.3507 ± 0.0008,Lower is better; curve quality / probabilistic calibration.
+DeepHit,0.1104 ± 0.0002,0.3526 ± 0.0011,Lower is better; curve quality / probabilistic calibration.

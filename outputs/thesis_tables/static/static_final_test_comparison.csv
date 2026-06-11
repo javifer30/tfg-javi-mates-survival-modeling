@@ -1,0 +1,5 @@
+Model,Test Harrell C-index,Test final-risk C-index,Test Ctd Antolini,Test mean horizon C-index,Test IBS,Test IBLL/NBLL,Notes
+CoxPH,0.7411 ± 0.0000,--,0.7411 ± 0.0000,0.7266 ± 0.0000,0.1147 ± 0.0000,0.3693 ± 0.0000,Deterministic Cox model; natural scalar risk.
+DeepSurv,0.7615 ± 0.0008,--,0.7615 ± 0.0008,0.7463 ± 0.0004,0.1110 ± 0.0005,0.3560 ± 0.0013,Neural proportional-risk model; natural scalar risk.
+PCHazard,--,0.7543 ± 0.0005,0.7688 ± 0.0014,0.7491 ± 0.0005,0.1095 ± 0.0002,0.3507 ± 0.0008,Curve-producing model; final-risk C-index is secondary.
+DeepHit,--,0.7484 ± 0.0050,0.7690 ± 0.0017,0.7490 ± 0.0013,0.1104 ± 0.0002,0.3526 ± 0.0011,Curve-producing model; final-risk C-index is secondary.

@@ -55,13 +55,13 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 - [ ] Compare corrected DeepHit survival curves against PCHazard survival curves.
 - [ ] Run a small synthetic DeepHit overfit test.
 - [ ] Tune DeepHit hyperparameters after diagnostics.
-- [ ] Regenerate or consolidate the full static benchmark comparison after the corrected DeepHit run.
-- [ ] Re-run CoxPH validation-only tuning with the full penalizer grid
-      `[0.0, 0.001, 0.01, 0.1]` before any Lightning AI final-seed run.
-- [ ] Run validation-only static hyperparameter tuning for CoxPH, DeepSurv, PCHazard and DeepHit.
-- [ ] Run final static model evaluation with seeds 42, 123 and 2026 after validation selection.
 
-- [ ] Consolidate or regenerate `outputs/metrics/static_model_comparison.csv` from the final static model metrics.
+- [ ] Run the new `static_72h_pycox` data build on real MIMIC-derived inputs.
+- [ ] Run validation-only tuning for the new `static_72h_pycox` models.
+- [ ] Run final 3-seed evaluation for the selected `static_72h_pycox` models.
+- [ ] Compare `static_72h_pycox` results against future dynamic 72h models on
+      the same cohort, split and target definition.
+
 - [ ] Decide whether the thesis requires a full dynamic landmark pipeline and DySurv training, then document the decision in `docs/DECISIONS.md`.
 - [ ] If dynamic modeling remains in scope, implement and validate patient/stay-level split before landmark generation.
 - [ ] Update root `README.md` so usage commands match the current scripts and configs.
@@ -89,6 +89,22 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 
 ## Done Recently
 
+- [x] Implemented the isolated `static_72h_pycox` pipeline skeleton, configs,
+      scripts, metrics and synthetic validation tests — 2026-06-11
+- [x] Generated thesis-ready final static tables, figures and
+      `outputs/metrics/final_static_model_comparison.csv` from
+      `outputs/final_static/`; the stale `static_model_comparison.csv` remains
+      excluded from final reporting — 2026-06-10
+- [x] Added CoxPH final-seed results and completed the four-model static
+      comparison for CoxPH, DeepHit, DeepSurv and PCHazard — 2026-06-09
+- [x] Re-ran CoxPH validation-only tuning with the full penalizer grid
+      `[0.0, 0.001, 0.01, 0.1]`; selected `penalizer=0.1` — 2026-06-09
+- [x] Ran validation-only static hyperparameter tuning for CoxPH, DeepSurv,
+      PCHazard and DeepHit — 2026-06-09
+- [x] Ran final static model evaluation with seeds 42, 123 and 2026 after
+      validation selection — 2026-06-09
+- [x] Analyzed final static three-seed results for DeepHit, DeepSurv and
+      PCHazard and logged them in `docs/EXPERIMENT_LOG.md` — 2026-06-09
 - [x] Investigated CoxPH smoke-test metric regression and confirmed the new
       pipeline reproduces the old CoxPH benchmark with `penalizer=0.1` —
       2026-06-08
