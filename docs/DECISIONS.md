@@ -589,3 +589,59 @@ Related history: not yet consolidated
 - [ ] Run validation-only tuning for the 72-hour static models.
 - [ ] Run final 3-seed evaluation for the selected 72-hour static models.
 - [ ] Implement dynamic models on the same 72-hour cohort and split.
+
+## DEC-010 — Audit grids and PCHazard interpolation for static_72h_pycox
+
+Date: 2026-06-12
+Status: accepted
+Scope: evaluation
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The first `static_72h_pycox` validation tuning run showed PCHazard with
+  validation Antolini Ctd near 0.40 while its mean horizon C-index was near
+  0.69.
+- The DySurv static MIMIC-IV reference notebook sets `model.sub = 10` before
+  calling `PCHazard.predict_surv_df`.
+- The previous 72-hour config used a daily grid for both integrated IBS/IBLL and
+  horizon C-index.
+
+### Decision
+- Keep `pycox.DeepHitSingle` without a manual tail category.
+- Set PCHazard `sub=10` before survival prediction and expose it in
+  `configs/static_72h_tuning.yaml`.
+- Use a per-split 100-point integration grid for IBS/IBLL, bounded by observed
+  durations, prediction support and the 10-day horizon.
+- Keep daily `horizon_times: [1, ..., 10]` only for horizon C-index.
+- Add audit artifacts under `outputs/static_72h/audit/` for discretization cuts,
+  evaluation grids, survival-curve sanity checks and DeepHit/PCHazard tail
+  diagnostics.
+
+### Reason
+- PCHazard is a continuous-time piecewise-constant hazard model in pycox; the
+  `sub` interpolation setting affects the survival support used by Antolini Ctd.
+- DySurv's notebook uses the same `model.sub = 10` convention, so this is a
+  fidelity fix rather than a model redesign.
+- Separating integration and horizon grids avoids conflating probabilistic
+  integrated metrics with the project's daily discrimination summary.
+
+### Consequences
+- Existing PCHazard tuning metrics generated before this fix should be treated
+  as stale.
+- Existing IBS/IBLL values for `static_72h_pycox` generated on the old daily
+  grid should not be mixed with new 100-point-grid values.
+- Full validation-only tuning should be rerun before final 3-seed evaluation.
+
+### Related files
+- configs/static_72h_tuning.yaml
+- scripts/tune_static_72h_models.py
+- src/models/static_72h_pycox.py
+- src/evaluation/static_72h_metrics.py
+- outputs/static_72h/audit/
+
+### Follow-up
+- [ ] Rerun full validation-only tuning for all `static_72h_pycox` models after
+      this audit fix.
+- [ ] Run final 3-seed evaluation only after the new selected hyperparameters
+      are written.

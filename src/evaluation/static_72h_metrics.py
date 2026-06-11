@@ -14,6 +14,24 @@ def survival_at_times(surv_df, times):
     return expanded.loc[eval_index].to_numpy(dtype=float).T
 
 
+def metric_integration_grid(surv_df, durations, max_horizon_days, num_points=100):
+    durations = np.asarray(durations, dtype=float)
+    surv_index = np.asarray(surv_df.index, dtype=float)
+    finite_durations = durations[np.isfinite(durations)]
+    finite_index = surv_index[np.isfinite(surv_index)]
+    if finite_durations.size == 0 or finite_index.size == 0:
+        return np.asarray([], dtype=float)
+
+    lower = max(float(finite_durations.min()), float(finite_index.min()))
+    upper = min(float(finite_durations.max()), float(finite_index.max()), float(max_horizon_days))
+    if not upper > lower:
+        upper = min(float(finite_index.max()), float(max_horizon_days))
+        lower = min(lower, upper)
+    if upper <= lower:
+        return np.asarray([upper], dtype=float)
+    return np.linspace(lower, upper, int(num_points), dtype=float)
+
+
 def eval_surv_metrics(surv_df, durations, events, time_grid):
     from pycox.evaluation import EvalSurv
 

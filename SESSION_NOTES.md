@@ -1480,3 +1480,86 @@ without modifying or replacing the previous static pipeline.
 Run `scripts/build_static_72h_data.py` on the real MIMIC-derived inputs, inspect
 the dataset summary, then launch validation-only tuning with `--dry-run` and a
 small `--max-runs` smoke before full tuning.
+
+## 2026-06-12 — static_72h_pycox DeepHit/PCHazard Audit Fixes
+
+### Purpose
+
+Audit the new `static_72h_pycox` pipeline before final 3-seed evaluation, with
+special focus on pycox DeepHitSingle tail behavior, PCHazard interpolation,
+discrete-time cuts, evaluation grids and test-lock discipline.
+
+### Changes Made
+
+- Added a per-split 100-point integration grid for IBS and IBLL/NBLL.
+- Kept daily `horizon_times: [1, ..., 10]` for horizon C-index only.
+- Added PCHazard `sub=10` before `predict_surv_df`, matching the DySurv static
+  notebook.
+- Added audit outputs under `outputs/static_72h/audit/` for DeepHitSingle tail
+  checks, PCHazard checks, discrete cuts, grids and survival-curve sanity.
+
+### Audit Results
+
+- DeepHitSingle uses pycox native tail behavior; no manual tail category was
+  added.
+- DeepHitSingle validation survival at 10 days remained positive and
+  heterogeneous: min 0.00949, mean 0.66919, max 0.96999, share below `1e-6` 0.
+- PCHazard validation Antolini Ctd improved from stale pre-fix 0.40349 to
+  0.64926 with `sub=10`; mean horizon C-index was 0.69561.
+- PCHazard validation survival curves were monotone and finite, with mean
+  survival at 10 days 0.70618.
+- LogisticHazard interpolation produced tiny numerical sanity flags
+  (`max_survival` just above 1 and a few monotonicity violations around
+  numerical tolerance), not a DeepHit/PCHazard blocker.
+
+### Validation
+
+- Ran `py_compile` for modified static_72h modules/scripts; result passed.
+- Ran `pytest tests/test_static_72h_pipeline.py`; result 4 passed.
+- Ran validation-only audit recalculation for LogisticHazard, PCHazard and
+  DeepHitSingle using existing selected hyperparameters; no test split was used.
+
+### Caveat
+
+- A broader audit run including DeepSurv stopped during survival prediction
+  because pycox CoxPH attempted to allocate approximately 2.20 GiB for a dense
+  train+validation survival matrix.
+- Existing PCHazard tuning outputs before this audit are stale and should not be
+  used for final selection.
+
+### Documentation Updates
+
+- Added `DEC-010` to `docs/DECISIONS.md`.
+- Added `EXP-009` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/REPRODUCIBILITY.md` with static_72h audit outputs and grid
+  semantics.
+- Updated `docs/TODO.md` to require rerunning validation-only tuning before
+  final 3-seed evaluation.
+
+## 2026-06-12 — static_72h Explicit Daily Cuts
+
+### Purpose
+
+Apply the requested minimal change so pycox LogisticHazard and DeepHitSingle use
+explicit daily cuts `[0, 1, ..., 10]`, matching the desired 10-day support.
+
+### Changes Made
+
+- `src/models/static_72h_pycox.py` now passes `model_cfg["cuts"]` to
+  `label_transform` when present, otherwise preserving the previous
+  `num_durations` behavior.
+- `configs/static_72h_tuning.yaml` now sets daily cuts for LogisticHazard and
+  DeepHitSingle only.
+
+### Validation
+
+- Ran `py_compile` on `src/models/static_72h_pycox.py` and
+  `scripts/tune_static_72h_models.py`; result passed.
+- Ran dry-run tuning planning for LogisticHazard and DeepHitSingle with
+  `--max-runs 2`; result passed.
+
+### Notes
+
+- No model training or final evaluation was run.
+- Existing tuning outputs for LogisticHazard and DeepHitSingle are now stale
+  because their discretization changed.

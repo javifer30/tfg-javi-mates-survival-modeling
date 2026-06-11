@@ -507,3 +507,59 @@ C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe - <inline metrics/figures 
   curve CSVs are matrix-style prediction artifacts without clinically
   interpretable patient identifiers; such a figure would be arbitrary for the
   main memory.
+
+## EXP-009 — static_72h_pycox audit validation after grid/PCHazard fix
+
+Date: 2026-06-12
+Status: completed with caveat
+Model: LogisticHazard, PCHazard, DeepHitSingle; partial Kaplan-Meier/CoxPH checks
+Dataset: processed `static_72h_pycox` train/validation splits
+Config: `configs/static_72h_tuning.yaml`
+Related decisions: DEC-010
+
+### Goal
+- Audit pycox discrete-time cuts, DeepHitSingle tail behavior, PCHazard
+  interpolation and the separation between integrated-metric and horizon grids
+  before final 3-seed evaluation.
+
+### Commands
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile src/evaluation/static_72h_metrics.py src/models/static_72h_pycox.py scripts/tune_static_72h_models.py scripts/run_final_static_72h_seeds.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_static_72h_pipeline.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe - <inline static_72h audit validation script>
+```
+
+### Outputs
+- `outputs/static_72h/audit/deephit_single_time_grid_audit.json`
+- `outputs/static_72h/audit/deephit_single_survival_tail_check.csv`
+- `outputs/static_72h/audit/pchazard_audit.json`
+- `outputs/static_72h/audit/evaluation_grids.json`
+- `outputs/static_72h/audit/discrete_time_cuts_summary.json`
+- `outputs/static_72h/audit/survival_curve_sanity_checks.csv`
+- `outputs/static_72h/audit/discrete_audit_validation_summary.json`
+- Temporary audit run directories under `outputs/static_72h/audit_runs/`
+
+### Results
+- DeepHitSingle `labtrans.cuts` spans 0 to 10 days with 10 approximately
+  equally spaced cuts. Validation survival at 10 days remained positive and
+  heterogeneous: min 0.00949, mean 0.66919, max 0.96999, share below `1e-6` 0.
+- PCHazard with `sub=10` improved validation Antolini Ctd from the stale
+  pre-fix value 0.40349 to 0.64926. Mean horizon C-index was 0.69561.
+- PCHazard validation survival curves were monotone, finite and inside
+  `[0, 1]`; validation survival at 10 days had min 0.01092, mean 0.70618,
+  max 0.99575.
+- LogisticHazard and DeepHitSingle validation Ctd after the grid change were
+  0.68528 and 0.68852 respectively.
+- IBS/IBLL now use a 100-point per-split integration grid; daily horizons
+  `[1, ..., 10]` remain reserved for horizon C-index.
+
+### Validation
+- `pytest tests/test_static_72h_pipeline.py`: 4 passed.
+- `py_compile`: passed.
+
+### Caveat
+- A full audit validation attempt including DeepSurv stopped when pycox CoxPH
+  tried to allocate approximately 2.20 GiB while predicting survival over a
+  dense train+validation Cox time index. This does not affect the DeepHitSingle
+  or PCHazard audit, but should be considered before running all final models
+  with the current DeepSurv survival prediction path.

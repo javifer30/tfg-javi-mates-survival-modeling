@@ -264,6 +264,21 @@ The main 72-hour metrics are Antolini Ctd, IBS and IBLL/NBLL from pycox
 `EvalSurv`, plus the project extension C-index by horizon for days 1 through
 10.
 
+Audit outputs for the 72-hour pycox static pipeline are written to:
+
+- `outputs/static_72h/audit/deephit_single_time_grid_audit.json`
+- `outputs/static_72h/audit/deephit_single_survival_tail_check.csv`
+- `outputs/static_72h/audit/pchazard_audit.json`
+- `outputs/static_72h/audit/evaluation_grids.json`
+- `outputs/static_72h/audit/discrete_time_cuts_summary.json`
+- `outputs/static_72h/audit/survival_curve_sanity_checks.csv`
+
+For `static_72h_pycox`, IBS and IBLL/NBLL use a per-split 100-point integration
+grid bounded by the observed evaluation range, survival prediction support and
+the 10-day horizon. The daily grid `[1, ..., 10]` is used only for horizon
+C-index. PCHazard sets `sub=10` before `predict_surv_df`, matching the DySurv
+static notebook convention.
+
 ## Evaluation
 
 The static evaluation config is:

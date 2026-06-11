@@ -60,7 +60,7 @@ def _run_config(tuning_config, model_name, config_id, hyperparameters, output_di
         "evaluation": {
             "splits": ["train", "validation", "test"] if include_test else ["train", "validation"],
             "allow_test_metrics": bool(include_test),
-            "evaluation_time_grid": copy.deepcopy(tuning_config["evaluation"]["evaluation_time_grid"]),
+            "metric_integration_num_points": int(tuning_config["evaluation"].get("metric_integration_num_points", 100)),
             "horizon_times": copy.deepcopy(tuning_config["evaluation"]["horizon_times"]),
             "save_example_curves": bool(include_test and tuning_config["evaluation"].get("save_example_curves", True)),
             "n_example_patients": int(tuning_config["evaluation"].get("n_example_patients", 9)),

@@ -57,7 +57,9 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 - [ ] Tune DeepHit hyperparameters after diagnostics.
 
 - [ ] Run the new `static_72h_pycox` data build on real MIMIC-derived inputs.
-- [ ] Run validation-only tuning for the new `static_72h_pycox` models.
+- [ ] Rerun validation-only tuning for the new `static_72h_pycox` models after
+      the 2026-06-12 audit fixes to PCHazard `sub=10` and IBS/IBLL integration
+      grids.
 - [ ] Run final 3-seed evaluation for the selected `static_72h_pycox` models.
 - [ ] Compare `static_72h_pycox` results against future dynamic 72h models on
       the same cohort, split and target definition.
@@ -89,6 +91,10 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 
 ## Done Recently
 
+- [x] Audited `static_72h_pycox` DeepHitSingle/PCHazard time grids, added audit
+      artifacts, separated IBS/IBLL integration grids from daily horizon
+      C-index, and fixed PCHazard prediction interpolation with `sub=10` —
+      2026-06-12
 - [x] Implemented the isolated `static_72h_pycox` pipeline skeleton, configs,
       scripts, metrics and synthetic validation tests — 2026-06-11
 - [x] Generated thesis-ready final static tables, figures and
