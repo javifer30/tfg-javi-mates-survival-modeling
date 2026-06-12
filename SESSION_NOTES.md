@@ -1945,3 +1945,56 @@ C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/run_final_dynamic_
 
 Run full validation-only dynamic tuning, inspect calibration/survival curves
 and only then launch final three-seed dynamic evaluation.
+
+## 2026-06-12 — Expanded Dynamic 72h Tuning Grid
+
+### Purpose
+
+Add the approved DySurv and Dynamic-DeepHit hyperparameter combinations to the
+dynamic_72h validation-only tuning config using notation that is robust with
+the current implementation.
+
+### Changes Made
+
+- Updated `configs/dynamic_72h_tuning.yaml` with the approved DySurv grid.
+- Updated `configs/dynamic_72h_tuning.yaml` with the approved
+  Dynamic-DeepHit grid.
+- Added tuning-script normalization so DySurv `loss_weights` entries are
+  expanded to `w_surv`, `w_recon` and `w_kl` before training.
+- Kept Dynamic-DeepHit validation for `alpha + beta <= 1`.
+- Propagated Dynamic-DeepHit `num_durations` from config instead of relying on
+  hardcoded internal slices.
+
+### Validation
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile scripts/tune_dynamic_72h_models.py src/models/dynamic_72h/train.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_dynamic_72h_models.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dysurv --dry-run --max-runs 3 --sample-size 16 --device cpu
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dynamic_deephit --dry-run --max-runs 2 --sample-size 16 --device cpu
+```
+
+### Results
+
+- `py_compile`: passed.
+- `tests/test_dynamic_72h_models.py`: 2 passed.
+- DySurv dry-run planned successfully.
+- Dynamic-DeepHit dry-run planned successfully.
+- Expanded grid sizes: 384 DySurv candidates and 512 Dynamic-DeepHit
+  candidates.
+- DySurv `loss_weights` normalization was checked on the first expanded
+  candidate.
+- No model training, final evaluation or test metrics were run.
+
+### Documentation Updates
+
+- Added `DEC-015` to `docs/DECISIONS.md`.
+- Updated `docs/REPRODUCIBILITY.md` with expanded dynamic grid sizes and staged
+  execution guidance.
+- Did not update `docs/EXPERIMENT_LOG.md` because no experiment was trained.
+- Did not update `docs/TODO.md` because priorities did not change.
+
+### Next Recommended Action
+
+Launch full validation-only dynamic tuning on GPU, or run staged chunks with
+`--max-runs` first to estimate runtime.

@@ -855,3 +855,48 @@ Related history: not yet consolidated
 - [ ] Run full validation-only dynamic_72h tuning.
 - [ ] Review dynamic smoke losses/curves before launching final 3-seed runs.
 - [ ] Run final dynamic_72h three-seed evaluation only after tuning is complete.
+
+## DEC-015 — Expanded dynamic_72h tuning grid
+
+Date: 2026-06-12
+Status: accepted
+Scope: config | tuning
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The first dynamic_72h smoke config was intentionally small.
+- The next validation-only tuning pass needs a broader but still explicit grid
+  for DySurv and Dynamic-DeepHit.
+
+### Decision
+- Replace the small smoke grid in `configs/dynamic_72h_tuning.yaml` with the
+  approved dynamic tuning combinations for DySurv and Dynamic-DeepHit.
+- Keep tuning validation-only and keep final test evaluation separated.
+- Support DySurv `loss_weights` as a list of dictionaries in YAML, normalizing
+  each candidate to the implementation keys `w_surv`, `w_recon` and `w_kl`.
+- Make Dynamic-DeepHit `num_durations` configurable in the training code while
+  keeping the current approved value at 10.
+- Keep Dynamic-DeepHit `include_tail_category: true` in the grid.
+
+### Reason
+- The YAML notation now matches the approved hyperparameter plan more closely.
+- Normalizing `loss_weights` avoids fragile duplicated keys in the grid.
+- Propagating `num_durations` removes an unnecessary hardcoded assumption
+  without changing the current 10-day protocol.
+
+### Consequences
+- The expanded grid currently contains 384 DySurv candidates and 512
+  Dynamic-DeepHit candidates.
+- Full dynamic tuning is now a substantial GPU run and should be launched
+  deliberately, ideally with staged dry-runs or `--max-runs` checks first.
+- No test metrics are produced by the tuning script.
+
+### Related files
+- configs/dynamic_72h_tuning.yaml
+- scripts/tune_dynamic_72h_models.py
+- src/models/dynamic_72h/train.py
+
+### Follow-up
+- [ ] Run full validation-only dynamic_72h tuning with the expanded grid.
+- [ ] Consider staged execution if runtime is too high.

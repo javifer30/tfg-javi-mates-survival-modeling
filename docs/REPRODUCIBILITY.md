@@ -405,6 +405,13 @@ Plan validation-only tuning:
 python scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dysurv dynamic_deephit --dry-run
 ```
 
+The expanded dynamic tuning grid in `configs/dynamic_72h_tuning.yaml` contains:
+
+- DySurv: 384 candidates.
+- Dynamic-DeepHit: 512 candidates.
+
+Use `--max-runs` for staged checks before launching the full grid.
+
 Run a small smoke test:
 
 ```bash

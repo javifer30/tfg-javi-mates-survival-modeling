@@ -202,7 +202,8 @@ def _train_dynamic_deephit(config, logger):
         raise ValueError("Dynamic-DeepHit requires alpha + beta <= 1")
     train_loader = make_loader(train, input_mode, cfg["batch_size"], True, config["data"].get("num_workers", 0))
     val_loader = make_loader(val, input_mode, cfg["batch_size"], False, config["data"].get("num_workers", 0))
-    output_dim = 11 if cfg.get("include_tail_category", True) else 10
+    num_durations = int(cfg.get("num_durations", 10))
+    output_dim = num_durations + (1 if cfg.get("include_tail_category", True) else 0)
     model = DynamicDeepHit72h(
         input_dim=metadata["n_model_input_features"],
         output_dim=output_dim,
@@ -231,8 +232,8 @@ def _train_dynamic_deephit(config, logger):
     if best_state is not None:
         model.load_state_dict(best_state)
     pd.DataFrame(train_log).to_csv(output_dir / "train_log.csv", index=False)
-    split_surv, split_targets = _predict_ddh(model, [train, val] + ([test] if test is not None else []), input_mode, cfg["batch_size"], device)
-    _write_ddh_probability_audit(model, [train, val] + ([test] if test is not None else []), input_mode, cfg["batch_size"], device, audit_dir)
+    split_surv, split_targets = _predict_ddh(model, [train, val] + ([test] if test is not None else []), input_mode, cfg["batch_size"], device, num_durations)
+    _write_ddh_probability_audit(model, [train, val] + ([test] if test is not None else []), input_mode, cfg["batch_size"], device, audit_dir, num_durations)
     metrics = evaluate_survival_predictions(model_name, split_surv, split_targets, config, metrics_dir, audit_dir, predictions_dir)
     metrics["best_validation_loss"] = float(best_val)
     save_json(metrics_dir / "metrics.json", metrics)
@@ -244,12 +245,13 @@ def _run_ddh_epoch(model, loader, device, optimizer, cfg):
     model.train(training)
     totals = {"loss_total": 0.0, "loss_longitudinal": 0.0, "loss_ranking": 0.0, "loss_nll": 0.0}
     n = 0
+    num_durations = int(cfg.get("num_durations", 10))
     for batch in loader:
         batch = _batch_to_device(batch, device)
         if training:
             optimizer.zero_grad()
         out = model(batch["x"].float())
-        pmf_eval = out["pmf"][:, :10]
+        pmf_eval = out["pmf"][:, :num_durations]
         loss_long = F.mse_loss(out["longitudinal_prediction"][:, :-1, :], batch["x"][:, 1:, :].float())
         loss_rank = deephit_ranking_loss(pmf_eval, batch["t_idx"], batch["event"], cfg.get("sigma", 0.1))
         loss_nll = pmf_nll(out["pmf"], batch["t_idx"], batch["event"])
@@ -266,14 +268,14 @@ def _run_ddh_epoch(model, loader, device, optimizer, cfg):
 
 
 @torch.no_grad()
-def _predict_ddh(model, splits, input_mode, batch_size, device):
+def _predict_ddh(model, splits, input_mode, batch_size, device, num_durations):
     model.eval()
     split_surv, split_targets = {}, {}
     for split in splits:
         loader = make_loader(split, input_mode, batch_size, False)
         surv = []
         for batch in loader:
-            pmf = model(batch["x"].to(device).float())["pmf"][:, :10]
+            pmf = model(batch["x"].to(device).float())["pmf"][:, :num_durations]
             s = 1.0 - torch.cumsum(pmf, dim=1)
             surv.append(s.clamp(0.0, 1.0).cpu().numpy())
         name = "validation" if split.name == "val" else split.name
@@ -283,7 +285,7 @@ def _predict_ddh(model, splits, input_mode, batch_size, device):
 
 
 @torch.no_grad()
-def _write_ddh_probability_audit(model, splits, input_mode, batch_size, device, audit_dir):
+def _write_ddh_probability_audit(model, splits, input_mode, batch_size, device, audit_dir, num_durations):
     model.eval()
     rows = []
     for split in splits:
@@ -291,7 +293,7 @@ def _write_ddh_probability_audit(model, splits, input_mode, batch_size, device, 
         pmf_sums, cif_decreases, surv_increases, s10_values = [], [], [], []
         for batch in loader:
             pmf_full = model(batch["x"].to(device).float())["pmf"]
-            pmf = pmf_full[:, :10]
+            pmf = pmf_full[:, :num_durations]
             cif = torch.cumsum(pmf, dim=1)
             surv = 1.0 - cif
             pmf_sums.append(pmf_full.sum(dim=1).detach().cpu().numpy())

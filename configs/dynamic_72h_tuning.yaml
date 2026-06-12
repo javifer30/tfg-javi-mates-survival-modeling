@@ -33,33 +33,44 @@ final:
 models:
   dysurv:
     grid:
-      hidden_rnn: [64]
+      hidden_rnn: [64, 128]
       layers_rnn: [1]
-      latent_dim: [16]
+      latent_dim: [16, 32]
       encoder_layers:
         - [128, 64]
       decoder_layers:
         - [128, 64]
       survival_layers:
         - [64]
-      dropout: [0.1]
-      learning_rate: [0.001]
-      weight_decay: [0.0]
-      batch_size: [128]
-      epochs: [20]
-      patience: [5]
-      w_surv: [0.333]
-      w_recon: [0.333]
-      w_kl: [0.333]
+        - [128, 64]
+      dropout: [0.1, 0.3]
+      learning_rate: [0.001, 0.0005]
+      weight_decay: [0.0, 0.0001]
+      batch_size: [128, 256]
+      epochs: [150]
+      patience: [15]
+      loss_weights:
+        - w_surv: 0.333
+          w_recon: 0.333
+          w_kl: 0.333
+        - w_surv: 0.50
+          w_recon: 0.25
+          w_kl: 0.25
+        - w_surv: 0.60
+          w_recon: 0.20
+          w_kl: 0.20
       num_durations: [10]
 
   dynamic_deephit:
     grid:
       typ: ["LSTM"]
       layers_rnn: [1]
-      hidden_rnn: [64]
+      hidden_rnn: [64, 128]
       long_param:
         - layers: [64]
+          dropout: 0.1
+          activation: "ReLU"
+        - layers: [128, 64]
           dropout: 0.1
           activation: "ReLU"
       att_param:
@@ -70,13 +81,16 @@ models:
         - layers: [64]
           dropout: 0.1
           activation: "ReLU"
-      alpha: [0.1]
-      beta: [0.5]
-      sigma: [0.1]
-      learning_rate: [0.001]
-      weight_decay: [0.0]
-      batch_size: [128]
-      iters: [20]
-      patience: [5]
+        - layers: [128, 64]
+          dropout: 0.1
+          activation: "ReLU"
+      alpha: [0.1, 0.2]
+      beta: [0.5, 0.7]
+      sigma: [0.1, 0.2]
+      learning_rate: [0.001, 0.0005]
+      weight_decay: [0.0, 0.0001]
+      batch_size: [128, 256]
+      iters: [150]
+      patience: [15]
       include_tail_category: [true]
-
+      num_durations: [10]

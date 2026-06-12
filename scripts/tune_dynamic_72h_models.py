@@ -26,6 +26,7 @@ def _model_list(config, requested):
 
 
 def _run_config(tuning_config, model_name, config_id, hyperparameters, output_dir, include_test, seed, sample_size=None, device="auto"):
+    hyperparameters = _normalize_hyperparameters(model_name, hyperparameters)
     return {
         "seed": int(seed),
         "device": device,
@@ -49,6 +50,22 @@ def _run_config(tuning_config, model_name, config_id, hyperparameters, output_di
             "timestamp": timestamp_utc(),
         },
     }
+
+
+def _normalize_hyperparameters(model_name, hyperparameters):
+    params = copy.deepcopy(hyperparameters)
+    if model_name == "dysurv" and "loss_weights" in params:
+        weights = params["loss_weights"] or {}
+        for key in ("w_surv", "w_recon", "w_kl"):
+            if key not in weights:
+                raise ValueError(f"DySurv loss_weights entry missing {key}: {weights}")
+            params[key] = float(weights[key])
+    if model_name == "dynamic_deephit":
+        alpha = float(params.get("alpha", 0.0))
+        beta = float(params.get("beta", 0.0))
+        if alpha + beta > 1.0:
+            raise ValueError(f"Dynamic-DeepHit requires alpha + beta <= 1, got {alpha + beta}")
+    return params
 
 
 def tuning_row(model_name, config_id, hyperparameters, seed, status, output_dir, metrics=None, error=None):
@@ -142,4 +159,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
