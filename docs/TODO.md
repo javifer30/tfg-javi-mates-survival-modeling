@@ -64,8 +64,15 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 - [ ] Compare `static_72h_pycox` results against future dynamic 72h models on
       the same cohort, split and target definition.
 
-- [ ] Decide whether the thesis requires a full dynamic landmark pipeline and DySurv training, then document the decision in `docs/DECISIONS.md`.
-- [ ] If dynamic modeling remains in scope, implement and validate patient/stay-level split before landmark generation.
+- [ ] Run full validation-only tuning for DySurv and Dynamic-DeepHit on
+      `dynamic_72h_dysurv_features`.
+- [ ] Inspect dynamic smoke/final candidate calibration and survival curves
+      before final 3-seed evaluation.
+- [ ] Run final 3-seed dynamic_72h evaluation after validation tuning.
+- [ ] Decide whether dynamic models require `delta_seq` or another
+      time-since-last-observed representation before training.
+- [ ] Decide whether the thesis requires full dynamic model training, then
+      document the execution scope in `docs/DECISIONS.md`.
 - [ ] Update root `README.md` so usage commands match the current scripts and configs.
 
 ## Medium Priority
@@ -86,11 +93,22 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 
 ## Blocked
 
-- [ ] Train a complete DySurv pipeline on MIMIC-IV landmarks — blocked until dynamic dataset scope, compute budget and config are confirmed.
+- [ ] Train a complete DySurv pipeline on MIMIC-IV dynamic inputs — blocked
+      until DySurv adapter, compute budget and training config are confirmed.
 - [ ] Publish or package the repository — blocked until data/output exclusion and reference-code policy are reviewed.
 
 ## Done Recently
 
+- [x] Implemented and built the `dynamic_72h` dataset from the `static_72h_pycox`
+      cohort/splits, with strict first-72h temporal filtering, train-only
+      feature selection/imputation/scaling and audit outputs — 2026-06-12
+- [x] Created a fast DySurv-compatible `dynamic_72h` feature subset with 76
+      temporal columns from the existing 146-feature arrays — 2026-06-12
+- [x] Overwrote `dynamic_72h_dysurv_features` as a 61-feature reduced subset
+      after removing 15 additional chart-derived variables — 2026-06-12
+- [x] Implemented and smoke-tested the isolated `dynamic_72h` DySurv and
+      Dynamic-DeepHit training/evaluation layer without using test during
+      tuning — 2026-06-12
 - [x] Audited `static_72h_pycox` DeepHitSingle/PCHazard time grids, added audit
       artifacts, separated IBS/IBLL integration grids from daily horizon
       C-index, and fixed PCHazard prediction interpolation with `sub=10` —

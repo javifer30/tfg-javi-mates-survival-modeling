@@ -645,3 +645,213 @@ Related history: not yet consolidated
       this audit fix.
 - [ ] Run final 3-seed evaluation only after the new selected hyperparameters
       are written.
+
+## DEC-011 — Dynamic 72h dataset anchored to static_72h_pycox cohort
+
+Date: 2026-06-12
+Status: accepted
+Scope: data
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The new dynamic experiment must compare DySurv/Dynamic-DeepHit against the
+  `static_72h_pycox` benchmark without changing cohort membership, splits or
+  survival targets.
+- Available temporal sources are the existing processed MIMIC extraction files
+  `timeseries.csv` and `timeserieslab.csv`.
+
+### Decision
+- Build `dynamic_72h` directly from
+  `data/processed/static_72h/{train,val,test}_static_72h.parquet`.
+- Preserve patient ordering, split assignment, `duration_eval_days`,
+  `duration_rel_days` and `event_eval` from `static_72h_pycox`.
+- Use only temporal measurements with `0 <= offset_minutes < 4320`, binned into
+  hours `0..71`.
+- For repeated patient-feature-hour measurements, keep the last measurement in
+  that hour.
+- Select temporal variables using train-patient coverage only, with the current
+  threshold `5%`.
+- Fit forward-fill fallback medians and robust p05/p95 scaling on train only,
+  then apply the fitted preprocessor unchanged to validation and test.
+- Save explicit observation masks before imputation; do not backward-fill.
+
+### Reason
+- Reusing the static 72h cohort and targets prevents static-vs-dynamic leakage
+  or cohort drift.
+- Train-only feature selection, imputation and scaling preserve validation/test
+  independence.
+- A strict first-72h temporal window matches the landmark prediction design and
+  avoids using post-prediction information.
+
+### Consequences
+- Dynamic model adapters should consume the saved arrays under
+  `data/processed/dynamic_72h/`.
+- `delta_seq` is not included yet; models requiring time-since-last-observed
+  inputs need a separate documented extension.
+- The current dataset is a clean input artifact only; DySurv and
+  Dynamic-DeepHit training remain pending.
+
+### Related files
+- configs/dynamic_72h_data.yaml
+- scripts/build_dynamic_72h_data.py
+- src/data/dynamic_72h_dataset.py
+- tests/test_dynamic_72h_dataset.py
+- data/processed/dynamic_72h/
+- outputs/dynamic_72h/audit/
+
+### Follow-up
+- [ ] Adapt DySurv to `dynamic_72h`.
+- [ ] Adapt Dynamic-DeepHit to `dynamic_72h`.
+- [ ] Decide whether to add `delta_seq` before dynamic model training.
+
+## DEC-012 — DySurv-compatible dynamic feature subset for first training pass
+
+Date: 2026-06-12
+Status: accepted
+Scope: data
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The full `dynamic_72h` build selected 146 temporal variables by train
+  coverage.
+- The DySurv reference table uses a smaller curated clinical variable set.
+- Rebuilding `dynamic_72h` from the large temporal CSVs is slow, while the
+  existing arrays already contain imputed/scaled values and masks.
+
+### Decision
+- Create a derived dataset under
+  `data/processed/dynamic_72h_dysurv_features/` by slicing `X_seq` and `M_seq`
+  columns from the already-built `dynamic_72h` arrays.
+- Preserve `patient_ids`, `X_static`, durations, events, split membership and
+  ordering unchanged.
+- Do not refit imputation or scaling for this subset.
+- Keep the full `dynamic_72h` dataset unchanged.
+
+### Reason
+- This provides a fast first-pass training input closer to the DySurv reference
+  variable set without reprocessing the large MIMIC-derived time-series CSV.
+- Since only columns are removed after preprocessing, the operation does not
+  introduce validation/test leakage.
+
+### Consequences
+- The reduced dataset has 76 temporal columns rather than 146.
+- Four DySurv table variables are still unavailable in the generated temporal
+  feature set: `ALT`, `Bilirubin`, `AST` and `Alkaline Phosphatase`.
+- Results from this reduced dataset should be labelled as
+  DySurv-compatible/curated-feature first pass, not as the full automatic
+  dynamic feature set.
+
+### Related files
+- scripts/filter_dynamic_72h_dysurv_features.py
+- data/processed/dynamic_72h/
+- data/processed/dynamic_72h_dysurv_features/
+
+### Follow-up
+- [ ] Use `dynamic_72h_dysurv_features` for the first dynamic model smoke
+      training pass.
+
+## DEC-013 — Remove selected chart duplicates from DySurv-compatible subset
+
+Date: 2026-06-12
+Status: accepted
+Scope: data
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The first `dynamic_72h_dysurv_features` subset retained 76 temporal columns.
+- Several retained columns were chart-derived versions of variables that also
+  have lab-derived equivalents or were explicitly requested for removal before
+  the first dynamic-model training pass.
+
+### Decision
+- Overwrite `data/processed/dynamic_72h_dysurv_features/` in place by removing
+  15 additional chart-derived temporal columns from `X_seq` and `M_seq`.
+- Preserve patient IDs, static features, durations, events and split ordering
+  unchanged.
+- Do not refit imputation or scaling.
+- Keep the full `data/processed/dynamic_72h/` dataset unchanged.
+
+### Reason
+- This further reduces redundancy and dimensionality for a first quick dynamic
+  training pass.
+- The operation is a pure column subset of already preprocessed arrays, so it
+  does not introduce validation/test leakage.
+
+### Consequences
+- The current `dynamic_72h_dysurv_features` dataset now has 61 temporal columns.
+- The earlier 76-feature version has been overwritten in that folder.
+- Any run using `dynamic_72h_dysurv_features` after this decision should be
+  labelled as the 61-feature reduced subset.
+
+### Related files
+- data/processed/dynamic_72h_dysurv_features/
+- docs/EXPERIMENT_LOG.md
+- SESSION_NOTES.md
+
+### Follow-up
+- [ ] Use the 61-feature `dynamic_72h_dysurv_features` subset for the first
+      dynamic model smoke training pass.
+
+## DEC-014 — Isolated dynamic_72h model layer
+
+Date: 2026-06-12
+Status: accepted
+Scope: model | evaluation
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The 72-hour methodology needs dynamic survival models comparable to
+  `static_72h_pycox` on the same cohort, splits, targets and horizon.
+- `dynamic_72h_dysurv_features` provides sequence tensors for the first
+  training pass.
+
+### Decision
+- Add a separate `dynamic_72h` experimental layer instead of modifying static
+  pipelines.
+- Use the saved `dynamic_72h_dysurv_features` `.npz` splits directly; no new
+  split creation and no target recomputation.
+- Use `values_plus_mask_plus_static` as the default dynamic input mode,
+  concatenating `X_seq`, `M_seq` and repeated `X_static` at every timestep.
+- Use daily cuts `[0, 1, ..., 10]` and discrete indices `0..9` for the
+  10-day post-72h horizon.
+- Implement DySurv as a TFG adaptation of the reference notebook: LSTM encoder,
+  latent `mu/logvar`, reparameterization, survival head, decoder reconstruction,
+  KL loss and reconstruction loss.
+- Implement Dynamic-DeepHit as a TFG adaptation of the reference `ddh` PyTorch
+  implementation: recurrent embedding, longitudinal prediction network,
+  temporal attention, cause-specific network and PMF loss/ranking loss.
+- Keep test metrics disabled during tuning; final 3-seed evaluation remains a
+  separate script.
+
+### Reason
+- This keeps static and dynamic experiments isolated and reproducible.
+- The input construction uses only first-72h information and train-fitted
+  preprocessing from the saved dataset.
+- A common evaluation layer preserves comparability with static 72h models.
+
+### Consequences
+- Tuning outputs are written under `outputs/dynamic_72h/tuning/{model}/`.
+- Final seed outputs are planned under `outputs/dynamic_72h/final/{model}/`.
+- The Dynamic-DeepHit adaptation uses an internal tail/support category by
+  default so survival at 10 days is not forced to zero.
+- The current smoke results are implementation checks only, not final model
+  evidence.
+
+### Related files
+- configs/dynamic_72h_tuning.yaml
+- configs/dynamic_72h_final.yaml
+- src/models/dynamic_72h/
+- src/evaluation/dynamic_72h_metrics.py
+- scripts/tune_dynamic_72h_models.py
+- scripts/run_final_dynamic_72h_seeds.py
+- scripts/evaluate_dynamic_72h_models.py
+- tests/test_dynamic_72h_models.py
+
+### Follow-up
+- [ ] Run full validation-only dynamic_72h tuning.
+- [ ] Review dynamic smoke losses/curves before launching final 3-seed runs.
+- [ ] Run final dynamic_72h three-seed evaluation only after tuning is complete.

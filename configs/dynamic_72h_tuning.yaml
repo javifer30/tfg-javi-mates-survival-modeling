@@ -1,0 +1,82 @@
+experiment:
+  name: dynamic_72h
+  prediction_time_hours: 72
+  max_horizon_days: 10
+  time_unit: days_since_72h
+  cuts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+paths:
+  dataset_dir: data/processed/dynamic_72h_dysurv_features
+  outputs_dir: outputs/dynamic_72h
+
+data:
+  input_mode: values_plus_mask_plus_static
+  num_workers: 0
+
+evaluation:
+  metric_integration_num_points: 100
+  horizon_times: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  save_example_curves: true
+  n_example_patients: 9
+
+tuning:
+  seed: 42
+  objective:
+    primary_metric: validation_ctd_antolini
+    primary_direction: maximize
+    tiebreaker_metric: validation_ibll
+    tiebreaker_direction: minimize
+
+final:
+  seeds: [42, 123, 2026]
+
+models:
+  dysurv:
+    grid:
+      hidden_rnn: [64]
+      layers_rnn: [1]
+      latent_dim: [16]
+      encoder_layers:
+        - [128, 64]
+      decoder_layers:
+        - [128, 64]
+      survival_layers:
+        - [64]
+      dropout: [0.1]
+      learning_rate: [0.001]
+      weight_decay: [0.0]
+      batch_size: [128]
+      epochs: [20]
+      patience: [5]
+      w_surv: [0.333]
+      w_recon: [0.333]
+      w_kl: [0.333]
+      num_durations: [10]
+
+  dynamic_deephit:
+    grid:
+      typ: ["LSTM"]
+      layers_rnn: [1]
+      hidden_rnn: [64]
+      long_param:
+        - layers: [64]
+          dropout: 0.1
+          activation: "ReLU"
+      att_param:
+        - layers: [64]
+          dropout: 0.1
+          activation: "ReLU"
+      cs_param:
+        - layers: [64]
+          dropout: 0.1
+          activation: "ReLU"
+      alpha: [0.1]
+      beta: [0.5]
+      sigma: [0.1]
+      learning_rate: [0.001]
+      weight_decay: [0.0]
+      batch_size: [128]
+      iters: [20]
+      patience: [5]
+      include_tail_category: [true]
+

@@ -1563,3 +1563,385 @@ explicit daily cuts `[0, 1, ..., 10]`, matching the desired 10-day support.
 - No model training or final evaluation was run.
 - Existing tuning outputs for LogisticHazard and DeepHitSingle are now stale
   because their discretization changed.
+
+## 2026-06-12 — Dynamic 72h Dataset Implementation Discussion
+
+### Purpose
+
+Discuss how to implement the dynamic 72-hour dataset for the new experiment,
+using the `static_72h_pycox` cohort/splits as the fixed reference and reviewing
+the DySurv/XMI-ICU MIMIC-IV preprocessing logic.
+
+### Context Reviewed
+
+- `AGENTS.md`, `SESSION_NOTES.md`, `docs/TODO.md` and
+  `configs/static_72h_data.yaml`.
+- `src/models_references/DySurv/Models/Results/Static Benchmarks MIMIC-IV.ipynb`.
+- `src/models_references/XMI-ICU/MIMIC_IV-preprocessing/`.
+- `src/models_references/XMI-ICU/eICU_preprocessing/`.
+- `src/data/static_72h_dataset.py`.
+- Existing processed artifacts under `data/processed/static_72h/` and
+  `data/processed/mimic_extraction/`.
+- Raw MIMIC-IV table headers and file names under `data/raw/mimic-iv-3.1/icu`
+  and `data/raw/mimic-iv-3.1/hosp`; no full raw tables were scanned.
+
+### Findings
+
+- The dynamic dataset should be derived from the existing static 72h IDs,
+  splits and targets, not by creating a new cohort or split.
+- Existing `data/processed/mimic_extraction/` already contains
+  `timeseries.csv`, `timeserieslab.csv` and a large
+  `preprocessed_timeseries.csv`, so raw extraction from `chartevents` and
+  `labevents` is probably unnecessary for the first implementation.
+- The original MIMIC-IV reference selects common labs and chart events,
+  converts timestamps to minute offsets from ICU admission, pivots variables,
+  resamples hourly, creates masks, forward-fills within patient and fills
+  remaining missing values.
+- For the new methodology, the main adaptation is to clip strictly to
+  `0 <= time < 72h`, align to hours `0..71`, fit imputation/scaling on train
+  only and save tensors plus audit outputs.
+
+### Documentation Updates
+
+- This session note only. No code/config/data/output changes were made in this
+  discussion turn.
+
+## 2026-06-12 — PCHazard LabTrans Fix
+
+### Purpose
+
+Fix the `static_72h_pycox` PCHazard tuning failure caused by passing explicit
+daily cuts to `PCHazard.label_transform`, which left `LabTransPCHazard` without
+the internal `duc` attribute.
+
+### Changes Made
+
+- Removed explicit `cuts` from the PCHazard grid in `configs/static_72h_tuning.yaml`.
+- Added `sub: [10]` to the PCHazard grid so prediction interpolation remains
+  explicit.
+- Updated `src/models/static_72h_pycox.py` so PCHazard always calls
+  `label_transform(num_durations)` while LogisticHazard and DeepHitSingle can
+  still use explicit daily cuts.
+
+### Validation
+
+- Ran `py_compile` on `src/models/static_72h_pycox.py` and
+  `scripts/tune_static_72h_models.py`; result passed.
+- Ran a direct PCHazard `label_transform(10).fit_transform(...)` check; result
+  had `has_duc=True` and cuts `[0.0, 1.0, ..., 10.0]`.
+- Ran `scripts/tune_static_72h_models.py --config configs/static_72h_tuning.yaml
+  --models pchazard --dry-run --max-runs 1`; result passed.
+
+### Notes
+
+- No model training or final evaluation was run.
+- Previous failed PCHazard tuning outputs should be rerun after this fix.
+
+## 2026-06-12 — LogisticHazard Explicit Cuts Warning Fix
+
+### Purpose
+
+Remove the pycox warning raised by passing explicit cuts to
+`LogisticHazard.label_transform` while preserving daily cuts `[0.0, ..., 10.0]`.
+
+### Changes Made
+
+- Updated `configs/static_72h_tuning.yaml` so LogisticHazard uses
+  `num_durations: [11]` and no explicit `cuts`.
+
+### Validation
+
+- Verified `LogisticHazard.label_transform(11).fit_transform(...)` produces
+  `out_features=11` and cuts `[0.0, 1.0, ..., 10.0]`.
+- Parsed `configs/static_72h_tuning.yaml`; result passed.
+- Ran `scripts/tune_static_72h_models.py --config configs/static_72h_tuning.yaml
+  --models logistic_hazard --dry-run --max-runs 1`; result passed.
+
+### Notes
+
+- No model training or final evaluation was run.
+- Previous LogisticHazard tuning outputs are stale because the discretization
+  configuration changed from explicit cuts to equivalent `num_durations=11`.
+
+## 2026-06-12 — Dynamic 72h Dataset Build
+
+### Purpose
+
+Implement and run the `dynamic_72h` dataset builder for the new 72-hour
+methodology, using the `static_72h_pycox` cohort, splits and targets as the
+fixed reference.
+
+### Changes Made
+
+- Added `configs/dynamic_72h_data.yaml`.
+- Added `src/data/dynamic_72h_dataset.py`.
+- Added `scripts/build_dynamic_72h_data.py`.
+- Added focused tests in `tests/test_dynamic_72h_dataset.py`.
+- Added `outputs/dynamic_72h/` to `.gitignore`.
+
+### Dataset Rules Implemented
+
+- Inputs come from `data/processed/static_72h/{train,val,test}_static_72h.parquet`.
+- Temporal sources are `timeseries.csv` and `timeserieslab.csv` under
+  `data/processed/mimic_extraction/`.
+- Only measurements with `0 <= offset_minutes < 4320` are used.
+- Measurements are binned into hours `0..71`.
+- Repeated patient-feature-hour rows keep the last measurement in that hour.
+- Temporal feature selection uses train-patient coverage only, threshold 5%.
+- Missingness masks are created before imputation.
+- Imputation uses forward-fill within patient/feature, then train medians.
+- Scaling uses train-only p05/p95 robust scaling.
+
+### Commands Run
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_dynamic_72h_dataset.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile src/data/dynamic_72h_dataset.py scripts/build_dynamic_72h_data.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/build_dynamic_72h_data.py --config configs/dynamic_72h_data.yaml --dry-run --sample-size 2
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/build_dynamic_72h_data.py --config configs/dynamic_72h_data.yaml --force
+```
+
+### Results
+
+- Unit tests: 2 passed.
+- `py_compile`: passed.
+- Full build completed.
+- Selected temporal features: 146.
+- Static features: 28.
+- Train arrays: `X_seq=(18706, 72, 146)`, `M_seq=(18706, 72, 146)`,
+  `X_static=(18706, 28)`, event rate 0.1369.
+- Validation arrays: `X_seq=(6236, 72, 146)`, `M_seq=(6236, 72, 146)`,
+  `X_static=(6236, 28)`, event rate 0.1369.
+- Test arrays: `X_seq=(6236, 72, 146)`, `M_seq=(6236, 72, 146)`,
+  `X_static=(6236, 28)`, event rate 0.1369.
+- Used temporal offsets ranged from 0 to 4319 minutes; no timestamp at or
+  beyond 72h was used.
+- Raw observed temporal fraction before imputation: train 0.1135, validation
+  0.1135, test 0.1127.
+- Every train/validation patient and 6234/6236 test patients had at least one
+  selected temporal measurement.
+
+### Outputs
+
+- Dataset arrays and metadata: `data/processed/dynamic_72h/`.
+- Audit outputs: `outputs/dynamic_72h/audit/`.
+
+### Documentation Updates
+
+- Added `DEC-011` to `docs/DECISIONS.md`.
+- Added `EXP-010` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/REPRODUCIBILITY.md` with dynamic 72h build commands and
+  outputs.
+- Updated `docs/TODO.md` with completed dynamic dataset build and pending
+  dynamic-model work.
+
+### Next Recommended Action
+
+Adapt and smoke-test DySurv and Dynamic-DeepHit loaders against
+`data/processed/dynamic_72h/`. Decide whether `delta_seq` is required before
+launching dynamic model training.
+
+## 2026-06-12 — DySurv-Compatible Dynamic Feature Subset
+
+### Purpose
+
+Create a fast reduced dynamic dataset for the first dynamic-model training
+attempt, keeping only temporal columns that map to the DySurv reference
+time-series variable table.
+
+### Changes Made
+
+- Added `scripts/filter_dynamic_72h_dysurv_features.py`.
+- Created `data/processed/dynamic_72h_dysurv_features/` from the existing
+  `data/processed/dynamic_72h/` arrays.
+- The full 146-feature `dynamic_72h` dataset was left unchanged.
+
+### Method
+
+- Loaded the existing `train/val/test_dynamic_72h.npz` files.
+- Selected DySurv-compatible columns from `X_seq` and `M_seq`.
+- Preserved `patient_ids`, `X_static`, `duration_eval_days`,
+  `duration_rel_days` and `event_eval` unchanged.
+- Did not rescan the large temporal CSVs.
+- Did not refit imputation or scaling.
+
+### Commands Run
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile scripts/filter_dynamic_72h_dysurv_features.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/filter_dynamic_72h_dysurv_features.py --force
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -c "<shape/NaN/mask validation>"
+```
+
+### Results
+
+- Source temporal features: 146.
+- Selected DySurv-compatible temporal features: 76.
+- Removed temporal features: 70.
+- Missing DySurv table variables: `ALT`, `Bilirubin`, `AST`,
+  `Alkaline Phosphatase`.
+- Train arrays: `X_seq=(18706, 72, 76)`, `M_seq=(18706, 72, 76)`,
+  `X_static=(18706, 28)`, event rate 0.1369.
+- Validation arrays: `X_seq=(6236, 72, 76)`, `M_seq=(6236, 72, 76)`,
+  `X_static=(6236, 28)`, event rate 0.1369.
+- Test arrays: `X_seq=(6236, 72, 76)`, `M_seq=(6236, 72, 76)`,
+  `X_static=(6236, 28)`, event rate 0.1369.
+- Validation confirmed no NaNs in `X_seq` and binary `M_seq` values.
+
+### Documentation Updates
+
+- Added `DEC-012` to `docs/DECISIONS.md`.
+- Added `EXP-011` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/REPRODUCIBILITY.md` with the subset command and outputs.
+- Updated `docs/TODO.md`.
+
+### Next Recommended Action
+
+Use `data/processed/dynamic_72h_dysurv_features/` for the first DySurv-style
+loader/training smoke test, while keeping the full `dynamic_72h` dataset for
+later comparison.
+
+## 2026-06-12 — dynamic_72h_dysurv_features Additional Reduction
+
+### Purpose
+
+Overwrite `data/processed/dynamic_72h_dysurv_features/` by removing 15
+additional chart-derived variables requested for the first dynamic-model
+training pass.
+
+### Removed Features
+
+- `chart::Anion gap`
+- `chart::Creatinine (serum)`
+- `chart::Hematocrit (serum)`
+- `chart::Potassium (serum)`
+- `chart::Potassium (whole blood)`
+- `chart::Glucose (serum)`
+- `chart::Glucose (whole blood)`
+- `chart::Glucose finger stick (range 70-100)`
+- `chart::Calcium non-ionized`
+- `chart::Ionized Calcium`
+- `chart::Chloride (serum)`
+- `chart::Hemoglobin`
+- `chart::Magnesium`
+- `chart::Platelet Count`
+- `chart::Sodium (serum)`
+
+### Method
+
+- Loaded the existing 76-feature `dynamic_72h_dysurv_features` arrays.
+- Sliced `X_seq` and `M_seq` in place to remove the requested columns.
+- Rewrote `train/val/test_dynamic_72h.npz`,
+  `temporal_feature_columns.json` and
+  `dynamic_72h_dysurv_feature_summary.json`.
+- Kept patient IDs, static features, durations and events unchanged.
+
+### Results
+
+- Previous subset features: 76.
+- Removed features: 15.
+- Current subset features: 61.
+- Train arrays: `X_seq=(18706, 72, 61)`, `M_seq=(18706, 72, 61)`,
+  `X_static=(18706, 28)`, event rate 0.1369.
+- Validation arrays: `X_seq=(6236, 72, 61)`, `M_seq=(6236, 72, 61)`,
+  `X_static=(6236, 28)`, event rate 0.1369.
+- Test arrays: `X_seq=(6236, 72, 61)`, `M_seq=(6236, 72, 61)`,
+  `X_static=(6236, 28)`, event rate 0.1369.
+
+### Validation
+
+- Verified all requested features are absent from
+  `temporal_feature_columns.json`.
+- Verified no NaNs in `X_seq`.
+- Verified `M_seq` remains binary.
+
+### Documentation Updates
+
+- Added `DEC-013` to `docs/DECISIONS.md`.
+- Added `EXP-012` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/REPRODUCIBILITY.md`.
+- Updated `docs/TODO.md`.
+
+## 2026-06-12 — Dynamic 72h Model Pipeline Smoke
+
+### Purpose
+
+Implement the first isolated dynamic 72h model layer for DySurv and
+Dynamic-DeepHit, using the 61-feature
+`data/processed/dynamic_72h_dysurv_features/` dataset without changing static
+pipelines or creating new splits.
+
+### Changes Made
+
+- Added `src/models/dynamic_72h/` with data loading, discretization, losses,
+  DySurv, Dynamic-DeepHit, prediction helpers and train entrypoint.
+- Added `src/evaluation/dynamic_72h_metrics.py`.
+- Added `configs/dynamic_72h_tuning.yaml` and `configs/dynamic_72h_final.yaml`.
+- Added `scripts/tune_dynamic_72h_models.py`.
+- Added `scripts/run_final_dynamic_72h_seeds.py`.
+- Added `scripts/evaluate_dynamic_72h_models.py`.
+- Added `tests/test_dynamic_72h_models.py`.
+
+### Method
+
+- Used saved `train/val/test_dynamic_72h.npz` splits directly.
+- Default model input mode is `values_plus_mask_plus_static`.
+- Current model input shape is `[N, 72, 150]`: 61 values, 61 masks and 28
+  repeated static features.
+- Target discretization uses daily cuts `[0, 1, ..., 10]` and indices `0..9`.
+- Tuning uses train and validation only; test is disabled until final-seed
+  runs.
+
+### Commands Run
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile src/models/dynamic_72h/common.py src/models/dynamic_72h/discretization.py src/models/dynamic_72h/data.py src/models/dynamic_72h/losses.py src/models/dynamic_72h/predict.py src/models/dynamic_72h/dysurv.py src/models/dynamic_72h/dynamic_deephit.py src/models/dynamic_72h/train.py src/evaluation/dynamic_72h_metrics.py scripts/tune_dynamic_72h_models.py scripts/run_final_dynamic_72h_seeds.py scripts/evaluate_dynamic_72h_models.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_dynamic_72h_models.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dysurv dynamic_deephit --dry-run --max-runs 2 --sample-size 32 --device cpu
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dysurv dynamic_deephit --max-runs 2 --sample-size 128 --device cpu --force
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dynamic_deephit --max-runs 1 --sample-size 128 --device cpu --force
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/run_final_dynamic_72h_seeds.py --config configs/dynamic_72h_final.yaml --model dysurv dynamic_deephit --dry-run --sample-size 32 --device cpu
+```
+
+### Smoke Results
+
+- Unit tests: 2 passed.
+- `py_compile`: passed.
+- DySurv smoke validation Ctd Antolini: 0.6367.
+- DySurv smoke validation IBS: 0.6475.
+- DySurv smoke validation IBLL/NBLL: 2.5545.
+- DySurv smoke mean horizon C-index: 0.6407.
+- Dynamic-DeepHit smoke validation Ctd Antolini: 0.7543.
+- Dynamic-DeepHit smoke validation IBS: 0.1385.
+- Dynamic-DeepHit smoke validation IBLL/NBLL: 0.4416.
+- Dynamic-DeepHit smoke mean horizon C-index: 0.7741.
+- No test metrics were recorded during tuning.
+
+### Audits
+
+- Split overlap checks passed.
+- Target bin indices are in `[0, 9]`.
+- Prediction sanity checks passed: no NaNs, values in `[0, 1]`, monotone
+  non-increasing survival curves.
+- Dynamic-DeepHit PMF sums were approximately 1, CIF was non-decreasing and
+  `S(10)` was not forced to zero.
+
+### Caveats
+
+- Smoke used only `sample_size=128`, so metrics are not final evidence.
+- DySurv calibration/error metrics were poor in this small smoke and should be
+  inspected before final 3-seed evaluation.
+- Dynamic-DeepHit uses an internal tail category by default to avoid forced
+  zero survival at 10 days; this is an adaptation to the 10-day support.
+
+### Documentation Updates
+
+- Added `DEC-014` to `docs/DECISIONS.md`.
+- Added `EXP-013` to `docs/EXPERIMENT_LOG.md`.
+- Updated `docs/REPRODUCIBILITY.md` with dynamic model commands.
+- Updated `docs/TODO.md`.
+
+### Next Recommended Action
+
+Run full validation-only dynamic tuning, inspect calibration/survival curves
+and only then launch final three-seed dynamic evaluation.

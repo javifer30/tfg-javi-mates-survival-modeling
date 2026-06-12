@@ -279,6 +279,182 @@ the 10-day horizon. The daily grid `[1, ..., 10]` is used only for horizon
 C-index. PCHazard sets `sub=10` before `predict_surv_df`, matching the DySurv
 static notebook convention.
 
+## Dynamic 72h Dataset
+
+The dynamic 72-hour dataset is built on top of the same cohort, splits and
+targets as `static_72h_pycox`.
+
+Required inputs:
+
+- `data/processed/static_72h/train_static_72h.parquet`
+- `data/processed/static_72h/val_static_72h.parquet`
+- `data/processed/static_72h/test_static_72h.parquet`
+- `data/processed/mimic_extraction/timeseries.csv`
+- `data/processed/mimic_extraction/timeserieslab.csv`
+
+Build the dataset:
+
+```bash
+python scripts/build_dynamic_72h_data.py --config configs/dynamic_72h_data.yaml --force
+```
+
+Smoke-test without writing outputs:
+
+```bash
+python scripts/build_dynamic_72h_data.py --config configs/dynamic_72h_data.yaml --dry-run --sample-size 2
+```
+
+Expected dataset outputs:
+
+- `data/processed/dynamic_72h/train_dynamic_72h.npz`
+- `data/processed/dynamic_72h/val_dynamic_72h.npz`
+- `data/processed/dynamic_72h/test_dynamic_72h.npz`
+- `data/processed/dynamic_72h/dynamic_72h_dataset_summary.json`
+- `data/processed/dynamic_72h/temporal_feature_columns.json`
+- `data/processed/dynamic_72h/static_feature_columns.json`
+- `data/processed/dynamic_72h/preprocessing_metadata.json`
+- `data/processed/dynamic_72h/preprocessor.joblib`
+
+Expected audit outputs:
+
+- `outputs/dynamic_72h/audit/dynamic_72h_data_audit.json`
+- `outputs/dynamic_72h/audit/missingness_summary.csv`
+- `outputs/dynamic_72h/audit/temporal_coverage_summary.csv`
+- `outputs/dynamic_72h/audit/feature_coverage_by_split.csv`
+- `outputs/dynamic_72h/audit/hourly_missingness_summary.csv`
+
+The saved arrays contain:
+
+- `patient_ids`
+- `X_seq` with shape `[N, 72, F]`
+- `M_seq` with shape `[N, 72, F]`
+- `X_static` with shape `[N, P]`
+- `duration_eval_days`
+- `duration_rel_days`
+- `event_eval`
+
+Current build summary from `EXP-010`: `F=146` temporal features, `P=28` static
+features, train shape `(18706, 72, 146)`, validation/test shape
+`(6236, 72, 146)`. Temporal features are selected using train coverage only;
+imputation and p05/p95 scaling are fitted on train only. Offsets are restricted
+to `0 <= offset_minutes < 4320`, then binned into hours `0..71`.
+
+### DySurv-compatible dynamic feature subset
+
+For a faster first training pass closer to the DySurv reference variable table,
+derive a reduced dataset from the already-built `dynamic_72h` arrays:
+
+```bash
+python scripts/filter_dynamic_72h_dysurv_features.py --force
+```
+
+This does not rescan MIMIC-derived temporal CSV files and does not refit
+imputation or scaling. It only slices `X_seq` and `M_seq` columns and keeps
+`patient_ids`, `X_static`, durations and events unchanged.
+
+Expected outputs:
+
+- `data/processed/dynamic_72h_dysurv_features/train_dynamic_72h.npz`
+- `data/processed/dynamic_72h_dysurv_features/val_dynamic_72h.npz`
+- `data/processed/dynamic_72h_dysurv_features/test_dynamic_72h.npz`
+- `data/processed/dynamic_72h_dysurv_features/temporal_feature_columns.json`
+- `data/processed/dynamic_72h_dysurv_features/dynamic_72h_dysurv_feature_summary.json`
+
+Current subset summary after `EXP-012`: 61 temporal features, train shape
+`(18706, 72, 61)`, validation/test shape `(6236, 72, 61)`. The folder
+`data/processed/dynamic_72h_dysurv_features/` was overwritten after removing
+15 additional chart-derived columns from the initial 76-feature subset. The
+DySurv table variables still missing from the temporal set are `ALT`,
+`Bilirubin`, `AST` and `Alkaline Phosphatase`.
+
+## Dynamic 72h Models
+
+The dynamic 72h model layer is isolated from the static pipelines.
+
+Implemented models:
+
+- `dysurv`
+- `dynamic_deephit`
+
+Main config:
+
+- `configs/dynamic_72h_tuning.yaml`
+
+Final wrapper config:
+
+- `configs/dynamic_72h_final.yaml`
+
+Default input mode:
+
+```yaml
+input_mode: values_plus_mask_plus_static
+```
+
+This creates model inputs by concatenating:
+
+- `X_seq`
+- `M_seq`
+- `X_static` repeated across all 72 timesteps
+
+For the current 61-feature subset, this gives model input shape
+`[N, 72, 150]`.
+
+Plan validation-only tuning:
+
+```bash
+python scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dysurv dynamic_deephit --dry-run
+```
+
+Run a small smoke test:
+
+```bash
+python scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dysurv dynamic_deephit --max-runs 2 --sample-size 128 --device cpu --force
+```
+
+Run validation-only tuning:
+
+```bash
+python scripts/tune_dynamic_72h_models.py --config configs/dynamic_72h_tuning.yaml --model dysurv dynamic_deephit
+```
+
+Plan final three-seed evaluation after tuning:
+
+```bash
+python scripts/run_final_dynamic_72h_seeds.py --config configs/dynamic_72h_final.yaml --model dysurv dynamic_deephit --dry-run
+```
+
+Run final three-seed evaluation after tuning:
+
+```bash
+python scripts/run_final_dynamic_72h_seeds.py --config configs/dynamic_72h_final.yaml --model dysurv dynamic_deephit
+```
+
+Consolidate final dynamic results:
+
+```bash
+python scripts/evaluate_dynamic_72h_models.py --outputs-dir outputs/dynamic_72h
+```
+
+Dynamic tuning outputs:
+
+- `outputs/dynamic_72h/tuning/{model}/tuning_results.csv`
+- `outputs/dynamic_72h/tuning/{model}/best_hyperparameters.json`
+- `outputs/dynamic_72h/tuning/{model}/{config_id}/seed_{seed}/metrics/metrics.json`
+- `outputs/dynamic_72h/tuning/{model}/{config_id}/seed_{seed}/train_log.csv`
+
+Dynamic audit outputs:
+
+- `outputs/dynamic_72h/audit/{model}/{config_id}/seed_{seed}/{model}_input_audit.json`
+- `outputs/dynamic_72h/audit/{model}/{config_id}/seed_{seed}/{model}_target_audit.json`
+- `outputs/dynamic_72h/audit/{model}/{config_id}/seed_{seed}/{model}_prediction_sanity.csv`
+- `outputs/dynamic_72h/audit/{model}/{config_id}/seed_{seed}/target_discretization_summary.csv`
+- `outputs/dynamic_72h/audit/dynamic_deephit/{config_id}/seed_{seed}/dynamic_deephit_probability_audit.csv`
+
+The shared target discretization uses daily cuts `[0, 1, ..., 10]` and maps
+durations to interval indices `0..9` for intervals `(0,1]`, ..., `(9,10]`.
+Tuning evaluates train and validation only; test metrics are produced only by
+the final-seed script.
+
 ## Evaluation
 
 The static evaluation config is:
