@@ -395,7 +395,7 @@ def _fit_discrete_pycox(model_name, model_class, labtrans_class, splits, config,
     model_cfg = config["model"]
     x_train, durations_train, events_train, _ = split_xy(splits["train"])
     x_val, durations_val, events_val, _ = split_xy(splits["validation"])
-    label_arg = np.asarray(model_cfg["cuts"], dtype="float32") if "cuts" in model_cfg else int(model_cfg.get("num_durations", 10))
+    label_arg = int(model_cfg.get("num_durations", 10)) if model_name == "pchazard" else np.asarray(model_cfg["cuts"], dtype="float32") if "cuts" in model_cfg else int(model_cfg.get("num_durations", 10))
     labtrans = labtrans_class.label_transform(label_arg, **model_cfg.get("label_transform_kwargs", {}))
     y_train = labtrans.fit_transform(durations_train, events_train)
     y_val = labtrans.transform(durations_val, events_val)
