@@ -111,3 +111,19 @@ data/processed/*
 
 # guidelines for the models
 guidelines/
+
+
+# DySurv faithful generated data and outputs
+/outputs/dysurv_faithful_72h/
+/data/processed/dysurv_faithful_72h/
+
+# DySurv bis with some results
+/outputs/dynamic_72h_bis/
+/outputs/thesis_tables/dynamic_72h_bis/
+
+# Generated training artifacts
+/checkpoints/
+/models/
+/outputs/checkpoints/
+/outputs/models/
+/outputs/predictions/

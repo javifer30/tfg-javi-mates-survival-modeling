@@ -868,3 +868,106 @@ probability/CIF audit.
 - [ ] Inspect DySurv calibration/loss behavior before final seeds.
 - [ ] Launch final 3-seed dynamic evaluation only after tuning selection is
       stable.
+
+## EXP-014 — DySurv posterior-collapse audit and tiny-overfit controls
+
+Date: 2026-06-14
+Status: completed
+Model: DySurv
+Dataset: `dynamic_72h_dysurv_features`
+Config: diagnostic use of selected `dysurv_cfg_032` architecture
+Seed: 31415 for controlled checks
+Run directory: no model run directory; report at
+`outputs/dynamic_72h/dysurv_audit_report.md`
+
+### Goal
+- Determine whether almost identical final survival curves were caused by
+  repeated inputs, broadcasting, an incorrect survival loss or training
+  collapse.
+
+### Checks run
+- Read-only array/dataloader variability audit for train, validation and test.
+- Numerical equivalence check between the current LogisticHazard NLL and the
+  cumulative BCE formula used by the reference notebook.
+- Analysis of final seeds 42, 123 and 2026 and 85 tuning train logs.
+- Two 64-patient, 200-epoch CPU controls: current loss weights and
+  survival-only.
+- Focused unit tests: `tests/test_dynamic_72h_models.py`.
+
+### Results
+- No repeated-input, batch-loss or prediction-broadcasting bug was found.
+- Final seed risk10 ranges were `0.003110` (42), `0` (123) and `0.004192`
+  (2026), close to the test Kaplan-Meier marginal risk `0.300532`.
+- Final KL losses were approximately zero, consistent with posterior collapse.
+- A train-mean reconstruction baseline achieved validation MSE `0.512927`,
+  slightly better than the selected DySurv decoder (`0.5147--0.5150`).
+- The unscaled repeated static `hour` feature accounts for about 59.75% of the
+  combined mean-reconstruction MSE.
+- Tiny controls showed that different/perturbed inputs can change predictions;
+  survival-only training produced substantially larger individual variation.
+- NLL equivalence difference: `0.0`; focused tests: 2 passed.
+
+### Interpretation
+- The current runs collapse toward a marginal survival curve because of the
+  adapted VAE/reconstruction objective, not because evaluation copies one
+  prediction across patients.
+- Current DySurv final results should not be used for individual dynamic-model
+  interpretation until the adaptation is corrected and retrained.
+
+## EXP-015 — DySurv-faithful dataset, tiny-overfit and smoke validation
+
+Date: 2026-06-14
+Status: completed smoke; full tuning pending
+Model: DySurv faithful 72h
+Dataset: `dysurv_faithful_72h`
+Config: `configs/dysurv_faithful_72h.yaml`
+Seed: 42
+Run directory: `outputs/dysurv_faithful_72h/`
+Related decision: DEC-016
+
+### Goal
+- Verify the isolated faithful data/model pipeline, demonstrate that the model
+  can produce individualized risk, and test collapse-aware epoch selection
+  without using test data.
+
+### Commands
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/prepare_dysurv_faithful_72h_dataset.py --config configs/dysurv_faithful_72h.yaml --force
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/audit_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --run-tiny-overfit --device cpu
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --max-runs 1 --sample-size 128 --device cpu --force
+```
+
+### Dataset results
+- Train: `18706 x 72 x 61`; event rate `0.136908`.
+- Validation: `6236 x 72 x 61`; event rate `0.136947`.
+- Test: `6236 x 72 x 61`; event rate `0.136947`.
+- Static shape: 28 variables per patient.
+- Split-overlap, finite-value and binary-mask checks passed.
+- Imputation residuals and static scaling were fitted on train only.
+
+### Tiny-overfit results
+- Patients: 64 per train/validation split; survival-only diagnostic.
+- Epochs: 100.
+- Train survival loss: `3.275400 -> 0.219514`.
+- Final train risk10 standard deviation: `0.363450`.
+- Final validation risk10 standard deviation: `0.388562`.
+- Final collapse flag: false.
+
+### Weighted smoke results
+- Patients: 128 per train/validation split.
+- Configuration: first 16-grid candidate, with survival/reconstruction/KL
+  weights `0.70/0.20/0.10` and 20-epoch KL warm-up.
+- No test data or test metrics were loaded.
+- Pure metric-best epoch: 14, validation Ctd `0.575526`, but collapsed with
+  risk10 standard deviation `0.000523` and range `0.002368`.
+- Selected non-collapsed epoch: 8, validation Ctd `0.566922`, IBS `0.281065`,
+  IBLL/NBLL `0.768921`, mean horizon C-index `0.554385`.
+- Selected risk10 standard deviation: `0.029566`; range `0.134672`.
+
+### Interpretation
+- The faithful architecture can overfit a small sample and produce strongly
+  individualized curves, so it is not structurally forced to a marginal curve.
+- The weighted smoke still demonstrates collapse pressure after early epochs;
+  collapse-aware checkpoint selection is necessary.
+- These metrics are smoke diagnostics only and must not be used as final model
+  evidence.

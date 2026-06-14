@@ -900,3 +900,72 @@ Related history: not yet consolidated
 ### Follow-up
 - [ ] Run full validation-only dynamic_72h tuning with the expanded grid.
 - [ ] Consider staged execution if runtime is too high.
+
+## DEC-016 — Isolated DySurv-faithful 72h pipeline
+
+Date: 2026-06-14
+Status: accepted
+Scope: data | model | training | evaluation
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The previous DySurv adaptation preserved the batch dimension and used a
+  correct LogisticHazard NLL, but final predictions were nearly marginal and
+  showed posterior/latent collapse.
+- Its decoder reconstructed 61 clinical values, 61 observation masks and 28
+  repeated static variables, while the architecture was substantially smaller
+  than the reference notebook.
+
+### Decision
+- Create `dysurv_faithful_72h` as a new pipeline without modifying or
+  overwriting the previous dynamic pipeline.
+- Derive a new dataset using within-patient forward fill, backward fill and a
+  residual median fitted only on train.
+- Standardize static variables with train-only statistics.
+- Use temporal clinical variables plus repeated standardized static variables
+  as the primary encoder input, but never concatenate `M_seq` as input.
+- Reconstruct only temporal clinical variables with a recurrent decoder.
+- Preserve the reference model's 72-step LSTM, latent dimension 20 and
+  `[294, 490, 294]` encoder/survival MLP capacity.
+- Do not condition the decoder on observed duration, because that would expose
+  outcome information unavailable at prediction time.
+- Add KL warm-up, checkpoints, full patient predictions and collapse
+  diagnostics as mandatory run artifacts.
+- During epoch and hyperparameter selection, prefer the best non-collapsed
+  validation candidate when one exists; record the pure metric maximum
+  separately.
+
+### Reason
+- This isolates the effect of fidelity, imputation and reconstruction target
+  from the earlier implementation problems.
+- It preserves the 72-hour landmark, target, horizon, splits and evaluation
+  protocol while preventing target and post-landmark leakage.
+- Collapse-aware selection prevents a slightly higher Ctd from silently
+  selecting nearly constant survival curves.
+
+### Consequences
+- New data are stored under `data/processed/dysurv_faithful_72h/`.
+- New results are stored under `outputs/dysurv_faithful_72h/`.
+- Smoke runs using `--sample-size` are isolated under `smoke/` and cannot be
+  consumed by the final-seed script.
+- The initial tuning grid contains 16 training/loss configurations and no
+  architecture search.
+- Full tuning and final three-seed evaluation remain pending.
+
+### Related files
+- configs/dysurv_faithful_72h.yaml
+- src/data/dysurv_faithful_72h_dataset.py
+- src/models/dynamic_72h/dysurv_faithful.py
+- src/models/dynamic_72h/train_dysurv_faithful.py
+- scripts/prepare_dysurv_faithful_72h_dataset.py
+- scripts/tune_dysurv_faithful_72h.py
+- scripts/run_final_dysurv_faithful_72h_seeds.py
+- scripts/audit_dysurv_faithful_72h.py
+- tests/test_dysurv_faithful_72h.py
+
+### Follow-up
+- [ ] Run all 16 validation-only faithful tuning candidates on GPU.
+- [ ] Review selected curves and collapse diagnostics before final seeds.
+- [ ] Run final seeds 42, 123 and 2026 only after a non-collapsed validation
+      selection is accepted.

@@ -68,6 +68,18 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
       `dynamic_72h_dysurv_features`.
 - [ ] Inspect dynamic smoke/final candidate calibration and survival curves
       before final 3-seed evaluation.
+- [ ] Block final DySurv interpretation until the posterior-collapse findings
+      in `outputs/dynamic_72h/dysurv_audit_report.md` are addressed.
+- [x] Add DySurv checkpoint/full-prediction saving and latent/risk dispersion
+      diagnostics before rerunning validation tuning.
+- [x] Revise the DySurv reconstruction target so masks and repeated unscaled
+      static covariates do not dominate the VAE objective; rerun tiny-overfit
+      and smoke validation in the isolated faithful pipeline.
+- [ ] Run the 16-candidate validation-only
+      `dysurv_faithful_72h` tuning grid on GPU.
+- [ ] Review faithful tuning survival curves and collapse diagnostics, then
+      accept or reject the selected validation candidate.
+- [ ] Run faithful final seeds 42, 123 and 2026 only after validation review.
 - [ ] Run final 3-seed dynamic_72h evaluation after validation tuning.
 - [ ] Decide whether dynamic models require `delta_seq` or another
       time-since-last-observed representation before training.
@@ -99,6 +111,10 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 
 ## Done Recently
 
+- [x] Implemented, prepared and smoke-tested the isolated
+      `dysurv_faithful_72h` pipeline with recurrent temporal-only
+      reconstruction, train-only imputation, collapse-aware selection,
+      checkpoints and full predictions — 2026-06-14
 - [x] Implemented and built the `dynamic_72h` dataset from the `static_72h_pycox`
       cohort/splits, with strict first-72h temporal filtering, train-only
       feature selection/imputation/scaling and audit outputs — 2026-06-12

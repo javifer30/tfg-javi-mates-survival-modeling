@@ -442,6 +442,16 @@ Consolidate final dynamic results:
 python scripts/evaluate_dynamic_72h_models.py --outputs-dir outputs/dynamic_72h
 ```
 
+Plot final dynamic survival curve examples from already generated prediction
+CSVs:
+
+```bash
+python scripts/plot_dynamic_72h_survival_curves.py --outputs-dir outputs/dynamic_72h_bis --figures-dir outputs/figures/dynamic_72h_bis --exclude dysurv:123
+```
+
+The `--exclude model:seed` option is useful for documented degenerate runs, for
+example the DySurv seed `123` latent-collapse diagnostic.
+
 Dynamic tuning outputs:
 
 - `outputs/dynamic_72h/tuning/{model}/tuning_results.csv`
@@ -461,6 +471,72 @@ The shared target discretization uses daily cuts `[0, 1, ..., 10]` and maps
 durations to interval indices `0..9` for intervals `(0,1]`, ..., `(9,10]`.
 Tuning evaluates train and validation only; test metrics are produced only by
 the final-seed script.
+
+## DySurv Faithful 72h Pipeline
+
+The isolated faithful config is:
+
+- `configs/dysurv_faithful_72h.yaml`
+
+Prepare the derived dataset without rerunning raw MIMIC extraction:
+
+```bash
+python scripts/prepare_dysurv_faithful_72h_dataset.py --config configs/dysurv_faithful_72h.yaml
+```
+
+The preparation restores missing entries using `M_seq`, applies within-patient
+forward fill and backward fill, then fills residual missingness with train-only
+medians. Static covariates are standardized using train only. `M_seq` is not a
+model input.
+
+Plan the 16-candidate validation-only grid:
+
+```bash
+python scripts/tune_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --dry-run
+```
+
+Run an isolated smoke candidate:
+
+```bash
+python scripts/tune_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --max-runs 1 --sample-size 128 --device cpu --force
+```
+
+Any command with `--sample-size` writes under
+`outputs/dysurv_faithful_72h/smoke/` and cannot become a final selection.
+
+Run full validation-only tuning on GPU:
+
+```bash
+python scripts/tune_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --device cuda
+```
+
+Generate or refresh the audit report, optionally rerunning tiny-overfit:
+
+```bash
+python scripts/audit_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml
+python scripts/audit_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --run-tiny-overfit --device cpu
+```
+
+After accepting a non-collapsed validation selection, plan and run final seeds:
+
+```bash
+python scripts/run_final_dysurv_faithful_72h_seeds.py --config configs/dysurv_faithful_72h.yaml --dry-run
+python scripts/run_final_dysurv_faithful_72h_seeds.py --config configs/dysurv_faithful_72h.yaml --device cuda
+```
+
+The final script requires exactly seeds `42`, `123` and `2026`, and refuses a
+selection marked collapsed or incomplete unless `--allow-collapsed` is passed
+explicitly.
+
+Main outputs:
+
+- `outputs/dysurv_faithful_72h/tuning_results.csv`
+- `outputs/dysurv_faithful_72h/best_hyperparameters.json`
+- `outputs/dysurv_faithful_72h/final_seed_results.csv`
+- `outputs/dysurv_faithful_72h/final_seed_summary.json`
+- `outputs/dysurv_faithful_72h/dysurv_faithful_audit_report.md`
+- per-run `checkpoints/`, `metrics/epoch_metrics.csv`, full prediction parquet
+  files and curve-example CSVs.
 
 ## Evaluation
 

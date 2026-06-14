@@ -1994,7 +1994,278 @@ C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dynamic_72h_m
 - Did not update `docs/EXPERIMENT_LOG.md` because no experiment was trained.
 - Did not update `docs/TODO.md` because priorities did not change.
 
+## 2026-06-14 - DySurv tuning aggregate correction
+
+### Changes
+
+- Updated `outputs/dynamic_72h_bis/tuning/dysurv/tuning_results.csv` to replace
+  the stale smoke-run `dysurv_cfg_001` row with the selected
+  `dysurv_cfg_032` result reconstructed from its tuning metrics and config
+  snapshot.
+- The corrected row records validation Ctd Antolini `0.782255`, mean horizon
+  C-index `0.797566`, IBS `0.142518` and IBLL/NBLL `0.453163`.
+- Corrected artifact paths to use `outputs/dynamic_72h_bis`.
+
+### Documentation Updates
+
+- Appended this session note only.
+- No experiment was run and no methodology, priorities or execution commands
+  changed, so `docs/EXPERIMENT_LOG.md`, `docs/DECISIONS.md`, `docs/TODO.md` and
+  `docs/REPRODUCIBILITY.md` were not updated.
+
 ### Next Recommended Action
 
 Launch full validation-only dynamic tuning on GPU, or run staged chunks with
 `--max-runs` first to estimate runtime.
+
+## 2026-06-12 - DySurv dynamic_72h_bis tuning inspection
+
+### Scope
+
+- Inspected existing validation-only DySurv tuning outputs under
+  `outputs/dynamic_72h_bis/tuning/dysurv`.
+- No model code, configs, training outputs or metrics files were modified.
+
+### Findings
+
+- Found 86 DySurv candidate directories and 85 `metrics.json` files.
+- `dysurv_cfg_086` has no metrics file in the inspected output tree.
+- The root `tuning_results.csv` / `best_hyperparameters.json` under the
+  inspected folder only summarize `dysurv_cfg_001`, so they should not be used
+  as the complete ranking for this run.
+- Reconstructed the ranking directly from per-candidate `metrics.json` files.
+- Best validation configuration by the configured objective
+  `validation_ctd_antolini` maximize, with `validation_ibll` minimize as
+  tiebreaker, is `dysurv_cfg_032`.
+- `dysurv_cfg_032` validation metrics: Ctd Antolini `0.782255`, mean horizon
+  C-index `0.797566`, IBS `0.142518`, IBLL/NBLL `0.453163`.
+
+### Documentation Updates
+
+- Appended this session note only.
+- Did not update `docs/EXPERIMENT_LOG.md` because no experiment was run.
+- Did not update `docs/DECISIONS.md`, `docs/TODO.md` or
+  `docs/REPRODUCIBILITY.md` because no methodology, priority or execution
+  instruction changed.
+
+## 2026-06-12 - DySurv final seed 123 diagnostic
+
+### Scope
+
+- Inspected user-provided final DySurv seed 123 artifacts from the Downloads
+  folder:
+  `tfg-javi-mates-survival-modeling_outputs_dynamic_72h_final_dysurv_seed_123`.
+- Reviewed `metrics.json`, `horizon_c_index.csv`, `train_log.csv`,
+  `config_snapshot.yaml` and example survival prediction CSVs.
+- No code, configs or generated model outputs were modified.
+
+### Findings
+
+- The run used `dysurv_cfg_032` with seed `123`, phase `final`, and
+  `include_test: true`.
+- Train, validation and test horizon C-index values are exactly `0.5` for all
+  horizons from 1 to 10 days.
+- Ctd Antolini is reported as `0.0` for all splits.
+- IBS/IBLL remain numerically reasonable, for example test IBS `0.144249` and
+  test IBLL/NBLL `0.457200`.
+- Example survival curves are identical across selected patients; `risk_at_10d`
+  has a single value `0.2793454528`.
+- Training loss did not explode; best validation loss occurred at epoch 77 with
+  `val_loss_total = 0.430403`.
+- The KL term collapsed to nearly zero at the best epoch, consistent with a
+  seed-specific degenerate solution / latent collapse where the model predicts
+  an almost population-level survival curve rather than patient-specific risk.
+
+### Documentation Updates
+
+- Appended this diagnostic note only.
+- Did not update `docs/EXPERIMENT_LOG.md` because no experiment was run in this
+  session.
+- Did not update `docs/DECISIONS.md`, `docs/TODO.md` or
+  `docs/REPRODUCIBILITY.md` because no project decision or execution protocol
+  changed.
+
+## 2026-06-12 - Dynamic 72h final result tables and survival curve figures
+
+### Scope
+
+- Inspected final dynamic outputs under `outputs/dynamic_72h_bis/final` for
+  `dysurv` and `dynamic_deephit`.
+- Summarized final test metrics from per-seed `metrics.json` files.
+- Applied the user-requested DySurv aggregation rule: exclude seed `123` from
+  DySurv mean/std because it was previously diagnosed as degenerate.
+- Added a lightweight plotting script for existing dynamic survival curve
+  example CSVs.
+
+### Artifacts
+
+- Added `scripts/plot_dynamic_72h_survival_curves.py`.
+- Generated figures under `outputs/figures/dynamic_72h_bis`.
+- Generated derived result tables under `outputs/thesis_tables/dynamic_72h_bis`.
+
+### Findings
+
+- DySurv final test summary, seeds `42` and `2026` only: Ctd Antolini mean
+  `0.756796`, mean horizon C-index `0.770349`, IBS `0.143498`, IBLL/NBLL
+  `0.454687`.
+- Dynamic-DeepHit final test summary, seeds `42`, `123` and `2026`: Ctd
+  Antolini mean `0.790712`, mean horizon C-index `0.796157`, IBS `0.126511`,
+  IBLL/NBLL `0.395774`.
+- `outputs/dynamic_72h_bis/tuning/dynamic_deephit/best_hyperparameters.json`
+  appears stale relative to final outputs: it reports `dynamic_deephit_cfg_001`,
+  while final runs use `dynamic_deephit_cfg_005`.
+
+### Validation
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile scripts\plot_dynamic_72h_survival_curves.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts\plot_dynamic_72h_survival_curves.py --outputs-dir outputs\dynamic_72h_bis --figures-dir outputs\figures\dynamic_72h_bis --exclude dysurv:123
+```
+
+### Documentation Updates
+
+- Appended this session note.
+- Updated `docs/REPRODUCIBILITY.md` with the survival-curve plotting command.
+- Did not update `docs/EXPERIMENT_LOG.md` because no model experiment was run.
+- Did not update `docs/DECISIONS.md` because no new methodological decision was
+  made beyond applying the user-requested exclusion rule.
+- Did not update `docs/TODO.md` because priorities did not change.
+
+## 2026-06-14 - DySurv near-constant prediction audit
+
+### Scope
+
+- Audited the original DySurv notebook, current architecture/loss/prediction,
+  processed dynamic arrays and existing tuning/final artifacts.
+- Ran read-only diagnostics and two controlled 64-patient CPU overfit checks.
+- Did not modify model code, configs, datasets or existing model outputs.
+
+### Findings
+
+- No repeated-input, dataloader, batch-dimension or broadcasting bug was found.
+- Seeds 42 and 2026 have very narrow test risk10 ranges (`0.003110` and
+  `0.004192`); seed 123 is exactly constant.
+- The test Kaplan-Meier marginal risk at 10 days is `0.300532`, close to the
+  seed 42 predictions.
+- KL and reconstruction diagnostics identify posterior collapse: final KL is
+  near zero and decoder MSE is no better than a train-mean reconstruction.
+- Reconstructing masks and repeated unscaled static features is a major
+  adaptation problem; `hour` alone contributes about 59.75% of baseline MSE.
+- Tiny controls prove that the architecture can respond to individual and
+  perturbed inputs, especially under survival-only training.
+
+### Artifacts
+
+- Added `outputs/dynamic_72h/dysurv_audit_report.md`.
+- Added `EXP-014` to `docs/EXPERIMENT_LOG.md`.
+- Added blocking/fix tasks to `docs/TODO.md`.
+- Did not update `docs/DECISIONS.md` because no implementation decision was
+  approved.
+- Did not update `docs/REPRODUCIBILITY.md` because execution instructions did
+  not change.
+
+### Recommendation
+
+Do not interpret current DySurv final runs as individualized survival curves.
+Add collapse diagnostics/checkpoints, correct the reconstruction target, and
+rerun tiny-overfit, smoke validation and tuning before final comparison.
+
+## 2026-06-14 - DySurv faithful 72h pipeline implementation
+
+### Scope
+
+- Reviewed the original DySurv notebook at
+  `src/models_references/DySurv/Models/Results/DySurv.ipynb`.
+- Added a new isolated faithful dataset/model/training/tuning/final/audit
+  pipeline without modifying the previous DySurv implementation or outputs.
+
+### Implementation
+
+- Added train-only `ffill -> bfill -> residual median` temporal imputation.
+- Standardized static inputs using train-only statistics.
+- Removed masks from model input channels.
+- Kept repeated standardized static variables as the primary configurable
+  input mode.
+- Added a reference-capacity LSTM/VAE model with latent dimension 20,
+  `[294, 490, 294]` encoder/survival MLPs and a recurrent decoder.
+- Reconstruction targets only the 61 temporal clinical variables.
+- Added KL warm-up, per-epoch latent/risk diagnostics, collapse flags,
+  collapse-aware epoch/config selection, best/last checkpoints, complete
+  prediction parquet files and curve-example CSVs.
+- Added a 16-candidate training/loss grid and exact final seeds 42, 123, 2026.
+
+### Commands Run
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile src/data/dysurv_faithful_72h_dataset.py src/models/dynamic_72h/dysurv_faithful.py src/models/dynamic_72h/train_dysurv_faithful.py scripts/prepare_dysurv_faithful_72h_dataset.py scripts/tune_dysurv_faithful_72h.py scripts/run_final_dysurv_faithful_72h_seeds.py scripts/audit_dysurv_faithful_72h.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests/test_dysurv_faithful_72h.py tests/test_dynamic_72h_models.py -q
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/prepare_dysurv_faithful_72h_dataset.py --config configs/dysurv_faithful_72h.yaml --force
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/audit_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --run-tiny-overfit --device cpu
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --max-runs 1 --sample-size 128 --device cpu --force
+```
+
+### Results
+
+- Tests: 8 passed across faithful and existing dynamic sanity suites.
+- Prepared dataset: train `18706 x 72 x 61`, validation/test
+  `6236 x 72 x 61`; all split and finite-value checks passed.
+- Tiny-overfit: train survival loss `3.275400 -> 0.219514`, final train
+  risk10 std `0.363450`, final validation risk10 std `0.388562`, no final
+  collapse flag.
+- Weighted smoke selected non-collapsed epoch 8: validation Ctd `0.566922`,
+  IBS `0.281065`, IBLL `0.768921`, risk10 std `0.029566`.
+- Pure metric-best epoch 14 had slightly higher Ctd `0.575526` but was
+  correctly rejected as collapsed (`risk10` range `0.002368`).
+- No test data were loaded during tiny-overfit or smoke tuning.
+- Full 16-candidate tuning and final three-seed evaluation were not run.
+
+### Documentation Updates
+
+- Added `DEC-016` and `EXP-015`.
+- Updated `docs/REPRODUCIBILITY.md` and `docs/TODO.md`.
+- Did not modify `docs/PROJECT_HISTORY.md`.
+
+### Next Recommended Action
+
+Run the 16 validation-only candidates on GPU, audit the selected curves and
+collapse diagnostics, then launch final seeds only if a stable non-collapsed
+candidate is accepted.
+
+## 2026-06-14 - DySurv faithful output tracking audit
+
+### Scope
+
+- Checked whether `outputs/dysurv_faithful_72h/` must be committed for the new
+  faithful DySurv pipeline to run after cloning.
+- Inspected only filenames, small summary files and code/config path references;
+  no patient-level data or heavy artifacts were opened.
+
+### Findings
+
+- The pipeline implementation depends on the new config, scripts, source modules
+  and test, not on previously generated output directories.
+- Tuning regenerates `tuning_results.csv`, `best_hyperparameters.json`, per-run
+  checkpoints, metrics and predictions under `outputs/dysurv_faithful_72h/`.
+- The final-seed script reads `best_hyperparameters.json`, so full tuning must run
+  first unless an accepted selection manifest is supplied separately.
+- The current root `best_hyperparameters.json` has `status: not_run`; committing
+  it would not enable final-seed execution.
+- `outputs/dysurv_faithful_72h/` is currently untracked and is not explicitly
+  covered by `.gitignore`, creating an accidental staging risk.
+
+### Recommendation
+
+- Do not commit the full output directory, checkpoints, predictions or generated
+  datasets. Commit the pipeline code/config/test and regenerate outputs.
+- Add `outputs/dysurv_faithful_72h/` to `.gitignore` before broad staging.
+- If future execution must skip tuning, store only the reviewed selected
+  hyperparameters in a small config-owned manifest rather than versioning the
+  whole output tree.
+
+### Documentation Updates
+
+- Appended this audit note only.
+- Did not update `docs/EXPERIMENT_LOG.md` because no experiment was run.
+- Did not update `docs/DECISIONS.md`, `docs/TODO.md` or
+  `docs/REPRODUCIBILITY.md` because no new implementation decision, priority or
+  execution command was introduced.
