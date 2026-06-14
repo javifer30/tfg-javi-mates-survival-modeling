@@ -55,6 +55,9 @@ tuning:
       - w_surv: 0.80
         w_recon: 0.15
         w_kl: 0.05
+      - w_surv: 0.333
+        w_recon: 0.333
+        w_kl: 0.333
     kl_warmup_epochs: [20, 50]
     metrics_every_n_epochs: [1]
 
