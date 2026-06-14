@@ -1,8 +1,18 @@
+import json
+
 import numpy as np
 import pandas as pd
 import torch
 
-from scripts.tune_dysurv_faithful_72h import build_run_config, normalize_candidate, select_candidates
+import scripts.tune_dysurv_faithful_72h as tuning_module
+from scripts.tune_dysurv_faithful_72h import (
+    _completed_signatures,
+    _next_config_index,
+    build_run_config,
+    candidate_signature,
+    normalize_candidate,
+    select_candidates,
+)
 from src.data.dysurv_faithful_72h_dataset import prepare_arrays
 from src.models.dynamic_72h.discretization import discretize_duration_event
 from src.models.dynamic_72h.dysurv_faithful import DySurvFaithful72h
@@ -145,6 +155,96 @@ def test_tuning_selection_prefers_noncollapsed_candidate():
     selection = select_candidates(rows)
     assert selection["metric_best"]["config_id"] == "collapsed"
     assert selection["selected"]["config_id"] == "individualized"
+
+
+def test_resume_matches_hyperparameters_and_continues_config_ids():
+    existing_params = {
+        "learning_rate": 0.001,
+        "w_surv": 0.7,
+        "w_recon": 0.2,
+        "w_kl": 0.1,
+    }
+    rows = [
+        {
+            "status": "completed",
+            "config_id": "dysurv_faithful_cfg_016",
+            "hyperparameters": json.dumps(existing_params, sort_keys=True),
+        },
+        {
+            "status": "failed",
+            "config_id": "dysurv_faithful_cfg_020",
+            "hyperparameters": json.dumps({"learning_rate": 0.0005}, sort_keys=True),
+        },
+    ]
+    assert candidate_signature(existing_params) in _completed_signatures(rows)
+    assert candidate_signature({"learning_rate": 0.0005}) not in _completed_signatures(rows)
+    assert _next_config_index(rows) == 21
+
+
+def test_resume_trains_only_new_candidates_and_appends_results(tmp_path, monkeypatch):
+    existing_params = {"learning_rate": 0.001, "w_surv": 0.7, "w_recon": 0.2, "w_kl": 0.1}
+    existing = {
+        "status": "completed",
+        "config_id": "dysurv_faithful_cfg_016",
+        "hyperparameters": json.dumps(existing_params, sort_keys=True),
+        "validation_ctd_antolini": 0.70,
+        "validation_ibll": 0.60,
+        "collapse_suspected": False,
+    }
+    pd.DataFrame([existing]).to_csv(tmp_path / "tuning_results.csv", index=False)
+    base = {
+        "paths": {"outputs_dir": str(tmp_path), "prepared_dataset_dir": "unused"},
+        "tuning": {
+            "seed": 42,
+            "include_test": False,
+            "grid": {
+                "learning_rate": [0.001],
+                "loss_weights": [
+                    {"w_surv": 0.7, "w_recon": 0.2, "w_kl": 0.1},
+                    {"w_surv": 0.333, "w_recon": 0.333, "w_kl": 0.333},
+                ],
+            },
+        },
+        "experiment": {},
+        "data": {},
+        "evaluation": {},
+        "collapse": {},
+        "model": {"fixed": {}},
+    }
+    calls = []
+
+    def fake_train(run_config, logger):
+        calls.append(run_config["run"]["config_id"])
+        return {
+            "splits": {
+                "validation": {
+                    "ctd_antolini": 0.71,
+                    "ibs": 0.20,
+                    "ibll": 0.50,
+                    "nbll": 0.50,
+                    "mean_horizon_c_index": 0.72,
+                }
+            },
+            "collapse": {
+                "collapse_suspected": False,
+                "std_risk10": 0.1,
+                "range_risk10": 0.5,
+                "std_mu": 0.2,
+                "kl_loss": 1.0,
+                "number_unique_risk10_rounded_6": 100,
+            },
+        }
+
+    monkeypatch.setattr(tuning_module, "load_yaml", lambda _: base)
+    monkeypatch.setattr(tuning_module, "train_dysurv_faithful", fake_train)
+    planned = tuning_module.tune("unused.yaml", device="cpu", resume=True)
+
+    assert calls == ["dysurv_faithful_cfg_017"]
+    assert [run["config_id"] for run in planned] == ["dysurv_faithful_cfg_017"]
+    results = pd.read_csv(tmp_path / "tuning_results.csv")
+    assert results["config_id"].tolist() == ["dysurv_faithful_cfg_016", "dysurv_faithful_cfg_017"]
+    selection = json.loads((tmp_path / "best_hyperparameters.json").read_text())
+    assert selection["selected"]["config_id"] == "dysurv_faithful_cfg_017"
 
 
 def test_tiny_overfit_produces_individual_risk():
