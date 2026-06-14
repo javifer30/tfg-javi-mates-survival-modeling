@@ -147,23 +147,33 @@ def _batch_to_device(batch: dict, device: torch.device) -> dict:
     return {key: value.to(device) for key, value in batch.items()}
 
 
-def _distribution_stats(mu, logvar, logits, risk10) -> dict:
+def _distribution_stats(mu, logvar, logits, risk10, active_unit_variance_threshold: float) -> dict:
     mu = np.concatenate(mu, axis=0)
     logvar = np.concatenate(logvar, axis=0)
     logits = np.concatenate(logits, axis=0)
     risk10 = np.concatenate(risk10, axis=0)
-    return {
+    kl_per_dimension = 0.5 * np.mean(mu ** 2 + np.exp(logvar) - 1.0 - logvar, axis=0)
+    variance_mu_per_dimension = np.var(mu, axis=0)
+    result = {
         "std_mu": float(np.std(mu)),
         "mean_abs_mu": float(np.mean(np.abs(mu))),
         "std_logvar": float(np.std(logvar)),
         "mean_logvar": float(np.mean(logvar)),
         "std_logits": float(np.std(logits)),
+        "mean_risk10": float(np.mean(risk10)),
         "std_risk10": float(np.std(risk10)),
         "min_risk10": float(np.min(risk10)),
         "max_risk10": float(np.max(risk10)),
         "range_risk10": float(np.ptp(risk10)),
         "number_unique_risk10_rounded_6": int(np.unique(np.round(risk10, 6)).size),
+        "active_units": int(np.sum(variance_mu_per_dimension > float(active_unit_variance_threshold))),
+        "active_unit_variance_threshold": float(active_unit_variance_threshold),
+        "kl_per_dimension_mean": float(np.mean(kl_per_dimension)),
+        "kl_per_dimension_min": float(np.min(kl_per_dimension)),
+        "kl_per_dimension_max": float(np.max(kl_per_dimension)),
     }
+    result.update({f"kl_dim_{index + 1:02d}": float(value) for index, value in enumerate(kl_per_dimension)})
+    return result
 
 
 def run_epoch(model, loader, device, config, epoch: int, optimizer=None, collect_survival: bool = False):
@@ -220,7 +230,15 @@ def run_epoch(model, loader, device, config, epoch: int, optimizer=None, collect
 
     result = {name: value / max(n, 1) for name, value in totals.items()}
     result["effective_w_kl"] = w_kl
-    result.update(_distribution_stats(latent_mu, latent_logvar, all_logits, all_risk10))
+    result.update(
+        _distribution_stats(
+            latent_mu,
+            latent_logvar,
+            all_logits,
+            all_risk10,
+            config["collapse"].get("active_unit_variance_threshold", 0.01),
+        )
+    )
     if not collect_survival:
         return result, None
     indices = np.concatenate(all_indices)
@@ -413,12 +431,18 @@ def train_dysurv_faithful(config: dict, logger) -> dict:
         else:
             patience_count += 1
         logger.info(
-            "DySurv faithful epoch %d/%d val_loss=%.5f val_ctd=%.5f risk10_std=%.6f collapse=%s",
+            "DySurv faithful epoch %d/%d val_loss=%.5f val_ctd=%.5f val_ibs=%.5f val_ibll=%.5f "
+            "risk10_mean=%.6f risk10_std=%.6f active_units=%d kl=%.6f collapse=%s",
             epoch,
             epochs,
             val_diag["total_loss"],
             val_metrics["ctd_antolini"],
+            val_metrics["ibs"],
+            val_metrics["ibll"],
+            val_diag["mean_risk10"],
             val_diag["std_risk10"],
+            val_diag["active_units"],
+            val_diag["kl_loss"],
             flags["collapse_suspected"],
         )
         if patience_count >= int(params["patience"]):

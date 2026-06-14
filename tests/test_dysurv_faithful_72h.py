@@ -20,6 +20,7 @@ from src.models.dynamic_72h.losses import hazards_to_survival, logistic_hazard_n
 from src.models.dynamic_72h.train_dysurv_faithful import (
     FaithfulDataset,
     FaithfulSplit,
+    _distribution_stats,
     _save_predictions,
     build_faithful_input,
 )
@@ -117,6 +118,21 @@ def test_prediction_orientation_preserves_patient_order(tmp_path):
     assert result["patient_id"].tolist() == split.patient_ids.tolist()
     assert np.allclose(result["risk10"], 1.0 - survival[:, -1])
     assert np.allclose(result["survival_day_1"], survival[:, 0])
+
+
+def test_distribution_stats_report_calibration_and_latent_diagnostics():
+    mu = [np.asarray([[0.0, 0.0], [1.0, 0.01], [2.0, 0.02]], dtype="float32")]
+    logvar = [np.zeros((3, 2), dtype="float32")]
+    logits = [np.zeros((3, 10), dtype="float32")]
+    risk10 = [np.asarray([0.2, 0.4, 0.6], dtype="float32")]
+    stats = _distribution_stats(mu, logvar, logits, risk10, active_unit_variance_threshold=0.01)
+
+    assert np.isclose(stats["mean_risk10"], 0.4)
+    assert np.isclose(stats["min_risk10"], 0.2)
+    assert np.isclose(stats["max_risk10"], 0.6)
+    assert stats["active_units"] == 1
+    assert stats["kl_dim_01"] > stats["kl_dim_02"]
+    assert np.isclose(stats["kl_per_dimension_mean"], (stats["kl_dim_01"] + stats["kl_dim_02"]) / 2)
 
 
 def test_tuning_config_never_loads_test():
