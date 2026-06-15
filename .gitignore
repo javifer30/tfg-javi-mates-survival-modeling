@@ -121,6 +121,10 @@ guidelines/
 /outputs/dynamic_72h_bis/
 /outputs/thesis_tables/dynamic_72h_bis/
 
+#Dynamic-DeepHit generated data and outputs
+/outputs/dynamic_deephit_faithful_72h/
+/data/processed/dynamic_deephit_faithful_72h/
+
 # Generated training artifacts
 /checkpoints/
 /models/
