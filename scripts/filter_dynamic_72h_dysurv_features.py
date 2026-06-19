@@ -110,9 +110,9 @@ def selected_feature_indices(features: list[str]) -> tuple[list[int], dict[str, 
     return [feature_to_index[feature] for feature in selected_unique], matched, missing
 
 
-def filter_split(input_dir: Path, output_dir: Path, split: str, indices: list[int]) -> dict[str, object]:
-    src = input_dir / f"{split}_dynamic_72h.npz"
-    dst = output_dir / f"{split}_dynamic_72h.npz"
+def filter_split(input_dir: Path, output_dir: Path, split: str, indices: list[int], input_suffix: str, output_suffix: str) -> dict[str, object]:
+    src = input_dir / f"{split}_{input_suffix}.npz"
+    dst = output_dir / f"{split}_{output_suffix}.npz"
     with np.load(src) as data:
         arrays = {key: data[key] for key in data.files}
     arrays["X_seq"] = arrays["X_seq"][:, :, indices].astype("float32", copy=False)
@@ -138,6 +138,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", default="data/processed/dynamic_72h")
     parser.add_argument("--output-dir", default="data/processed/dynamic_72h_dysurv_features")
+    parser.add_argument("--input-suffix", default="dynamic_72h")
+    parser.add_argument("--output-suffix", default="dynamic_72h")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -153,7 +155,10 @@ def main() -> None:
     if not selected_features:
         raise ValueError("No DySurv-compatible temporal features found")
 
-    split_summaries = [filter_split(input_dir, output_dir, split, indices) for split in ("train", "val", "test")]
+    split_summaries = [
+        filter_split(input_dir, output_dir, split, indices, args.input_suffix, args.output_suffix)
+        for split in ("train", "val", "test")
+    ]
 
     copy_if_exists(input_dir / "static_feature_columns.json", output_dir / "static_feature_columns.json")
     copy_if_exists(input_dir / "preprocessing_metadata.json", output_dir / "source_preprocessing_metadata.json")
@@ -165,7 +170,9 @@ def main() -> None:
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_dir": str(input_dir),
         "output_dir": str(output_dir),
-        "method": "column_subset_from_existing_dynamic_72h_npz",
+        "method": "column_subset_from_existing_dynamic_landmark_npz",
+        "input_suffix": args.input_suffix,
+        "output_suffix": args.output_suffix,
         "n_source_temporal_features": len(features),
         "n_selected_temporal_features": len(selected_features),
         "selected_temporal_features": selected_features,

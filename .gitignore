@@ -128,6 +128,9 @@ guidelines/
 # Dysurv static faithful
 /outputs/dysurv_static_faithful_72h/
 
+# Outputs
+/outputs/
+
 # Generated training artifacts
 /checkpoints/
 /models/

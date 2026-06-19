@@ -38,9 +38,21 @@ class FaithfulSplit:
     t_idx: np.ndarray
 
 
-def load_faithful_split(dataset_dir: str | Path, split: str, sample_size: int | None = None) -> FaithfulSplit:
+def _faithful_split_files(config: dict | None = None) -> dict[str, str]:
+    default = {
+        "train": "train_dynamic_72h.npz",
+        "validation": "val_dynamic_72h.npz",
+        "test": "test_dynamic_72h.npz",
+    }
+    if config is None:
+        return default
+    return config.get("data", {}).get("source_split_files") or config.get("data", {}).get("output_split_files") or default
+
+
+def load_faithful_split(dataset_dir: str | Path, split: str, sample_size: int | None = None, split_files: dict[str, str] | None = None) -> FaithfulSplit:
     file_split = "val" if split == "validation" else split
-    with np.load(Path(dataset_dir) / f"{file_split}_dynamic_72h.npz") as data:
+    filename = (split_files or _faithful_split_files()).get(split, f"{file_split}_dynamic_72h.npz")
+    with np.load(Path(dataset_dir) / filename) as data:
         arrays = {key: data[key] for key in data.files}
     n = len(arrays["patient_ids"])
     if sample_size is not None:
@@ -344,9 +356,10 @@ def train_dysurv_faithful(config: dict, logger) -> dict:
         raise ValueError("Test data cannot be loaded during tuning")
     dataset_dir = config["paths"]["prepared_dataset_dir"]
     sample_size = config.get("sample_size")
-    train = load_faithful_split(dataset_dir, "train", sample_size)
-    validation = load_faithful_split(dataset_dir, "validation", sample_size)
-    test = load_faithful_split(dataset_dir, "test", sample_size) if include_test else None
+    split_files = _faithful_split_files(config)
+    train = load_faithful_split(dataset_dir, "train", sample_size, split_files)
+    validation = load_faithful_split(dataset_dir, "validation", sample_size, split_files)
+    test = load_faithful_split(dataset_dir, "test", sample_size, split_files) if include_test else None
     checks = validate_faithful_splits(train, validation, test)
     input_mode = config["data"]["input_mode"]
     input_dim = train.x_seq.shape[2] + (train.x_static.shape[1] if input_mode == "temporal_plus_static_repeated" else 0)
@@ -377,6 +390,7 @@ def train_dysurv_faithful(config: dict, logger) -> dict:
     (output_dir / "metrics").mkdir(parents=True, exist_ok=True)
     (output_dir / "audit").mkdir(parents=True, exist_ok=True)
     save_yaml(output_dir / "config_snapshot.yaml", config)
+    save_yaml(output_dir / "config_used.yaml", config)
     save_json(output_dir / "audit" / "data_and_leakage_checks.json", checks)
 
     history = []

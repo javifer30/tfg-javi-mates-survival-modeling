@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.models.dynamic_72h.common import expand_grid, load_yaml, save_json, timestamp_utc
+from src.models.dynamic_72h.common import expand_grid, load_yaml, save_json, save_yaml, timestamp_utc
 from src.models.dynamic_72h.train_dysurv_static_faithful import train_dysurv_static_faithful
 from src.utils.logger import get_logger
 
@@ -178,6 +178,7 @@ def tune(config_path, dry_run=False, max_runs=None, sample_size=None, device="au
         if dry_run:
             continue
         run_config = build_run_config(base, config_id, params, run_dir, seed, sample_size, device, False)
+        save_yaml(run_dir.parent / "config_used.yaml", run_config)
         try:
             metrics = train_dysurv_static_faithful(run_config, logger)
             rows.append(result_row(config_id, params, seed, run_dir, sample_size, metrics))

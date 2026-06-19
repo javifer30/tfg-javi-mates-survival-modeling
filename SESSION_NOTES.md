@@ -2013,6 +2013,152 @@ C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dynamic_72h_m
   changed, so `docs/EXPERIMENT_LOG.md`, `docs/DECISIONS.md`, `docs/TODO.md` and
   `docs/REPRODUCIBILITY.md` were not updated.
 
+## 2026-06-14 - Full DySurv-faithful results analysis
+
+### Scope
+
+- Audited the completed 16-candidate tuning and final seeds `42`, `123` and
+  `2026` under `outputs/dysurv_faithful_72h`.
+- Reviewed selection metadata, final summaries, per-seed/per-horizon metrics,
+  collapse diagnostics, leakage checks and full/example survival predictions.
+
+### Findings
+
+- Selected config: `dysurv_faithful_cfg_002`; all 16 candidates and all three
+  final seeds were non-collapsed.
+- Final mean test Ctd `0.777839`, mean horizon C-index `0.776494`, IBS
+  `0.251928`, and IBLL/NBLL `0.706178`.
+- Test discrimination was stable, whereas IBS/IBLL showed material seed
+  variability.
+- Full predictions were individualized, bounded and monotone, but mean 10-day
+  predicted risk (`0.813`, `0.717`, `0.696`) substantially exceeded the
+  observed event indicator rate (`0.137`), indicating overprediction and poor
+  absolute calibration.
+- The root `dysurv_faithful_audit_report.md` remains stale in its counts and
+  still reports zero full tuning/final runs; raw summaries and per-seed files
+  were used as source of truth.
+
+### Documentation Updates
+
+- Added EXP-016 to `docs/EXPERIMENT_LOG.md`.
+- Marked faithful tuning, review and final seeds complete in `docs/TODO.md`.
+- No code, model outputs, configs or methodology were changed, so
+  `docs/DECISIONS.md` and `docs/REPRODUCIBILITY.md` were not updated.
+
+## 2026-06-14 - DySurv-faithful tuning resume behavior check
+
+### Finding
+
+- Inspected `scripts/tune_dysurv_faithful_72h.py` before extending the loss
+  weight grid.
+- The current script does not implement resume/skip behavior: an existing run
+  directory is only logged and is trained again, and `tuning_results.csv` is
+  rewritten from the rows produced by the current invocation.
+- Adding a third `loss_weights` option can also change positional config IDs,
+  so completed candidates must be matched by their normalized hyperparameter
+  JSON rather than only by `config_id`.
+
+### Recommendation
+
+- Add an explicit resume mode that loads the existing CSV, skips successful
+  hyperparameter signatures, assigns new stable IDs after the current maximum,
+  appends new rows and recomputes `best_hyperparameters.json` over all rows.
+- Do not launch the extended grid with the current script because it would
+  retrain and potentially overwrite existing results.
+
+### Documentation Updates
+
+- Appended this inspection note only. No experiment or code/config change was
+  performed, so no other documentation file required an update.
+
+## 2026-06-14 - DySurv-faithful resume mode implementation
+
+### Changes
+
+- Added explicit `--resume` support to
+  `scripts/tune_dysurv_faithful_72h.py`.
+- Completed candidates are matched by normalized hyperparameter JSON, so grid
+  ordering changes do not cause retraining.
+- New candidates receive IDs after the maximum existing ID; new rows are
+  appended logically to the existing results and selection is recomputed over
+  the combined history.
+- Failed candidates remain eligible for retry, while `--resume` and `--force`
+  are explicitly incompatible.
+- Added a focused regression test for signature matching and ID continuation.
+
+### Validation
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile scripts\tune_dysurv_faithful_72h.py tests\test_dysurv_faithful_72h.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests\test_dysurv_faithful_72h.py -q
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts\tune_dysurv_faithful_72h.py --config configs\dysurv_faithful_72h.yaml --device cpu --resume --dry-run
+```
+
+- Compilation passed.
+- Focused tests: 8 passed, including an integration-style resume/append test.
+- Resume dry-run skipped all 16 completed combinations and planned no runs.
+
+### Documentation Updates
+
+- Updated `docs/REPRODUCIBILITY.md` with the resume command and semantics.
+- Did not update `docs/EXPERIMENT_LOG.md`, `docs/DECISIONS.md` or
+  `docs/TODO.md` because no experiment, methodological decision or priority
+  change occurred.
+
+## 2026-06-14 - DySurv-faithful train Kaplan-Meier curve
+
+### Scope and Artifacts
+
+- Computed the descriptive Kaplan-Meier curve directly from
+  `data/processed/dysurv_faithful_72h/train_dynamic_72h.npz` using
+  `duration_eval_days` and `event_eval`.
+- Generated `outputs/figures/dysurv_faithful_72h/kaplan_meier_train.png` and
+  `kaplan_meier_train.csv`.
+
+### Findings
+
+- Training cohort size: `18,706`; observed events: `2,561`.
+- Kaplan-Meier survival at day 10: `0.696957`, corresponding to cumulative
+  event risk approximately `0.303043` after accounting for censoring.
+- The raw event-indicator mean `0.136908` must not be interpreted as the
+  10-day cumulative event probability because many observations are censored.
+- `duration_rel_days` was not used because the faithful prediction target is
+  the truncated 0--10 day time measured after the 72-hour landmark.
+
+### Documentation Updates
+
+- Appended this session note only. No model experiment, code/config change or
+  methodological decision was made.
+
+## 2026-06-14 - Extended DySurv-faithful per-epoch diagnostics
+
+### Changes
+
+- Extended faithful DySurv epoch reporting without changing training or
+  selection logic.
+- Added `mean_risk10`, active latent units, KL-per-dimension summaries and
+  individual `kl_dim_XX` columns to train/validation epoch diagnostics.
+- The visible epoch log now includes validation Ctd, IBS, IBLL, risk10 mean/std,
+  active units, total KL and collapse status.
+- Defined active units as latent dimensions with between-patient
+  `Var(mu_j) > 0.01`; added the threshold to config.
+
+### Validation
+
+```bash
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m py_compile src\models\dynamic_72h\train_dysurv_faithful.py tests\test_dysurv_faithful_72h.py
+C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe -m pytest tests\test_dysurv_faithful_72h.py -q
+```
+
+- Compilation passed; focused tests: 9 passed.
+- Added a focused test for risk mean, active-unit counting and per-dimension KL.
+
+### Documentation Updates
+
+- Added DEC-017 and updated `docs/REPRODUCIBILITY.md`.
+- Did not update `docs/EXPERIMENT_LOG.md` or `docs/TODO.md` because no model
+  experiment was run and priorities did not change.
+
 ### Next Recommended Action
 
 Launch full validation-only dynamic tuning on GPU, or run staged chunks with
@@ -2269,3 +2415,636 @@ candidate is accepted.
 - Did not update `docs/DECISIONS.md`, `docs/TODO.md` or
   `docs/REPRODUCIBILITY.md` because no new implementation decision, priority or
   execution command was introduced.
+
+## 2026-06-14 - Faithful DySurv curve plotting check
+
+### Scope and Finding
+
+- Checked the curve artifacts written by the faithful DySurv pipeline.
+- Each completed final seed writes
+  `outputs/dysurv_faithful_72h/final/seed_<seed>/predictions/test_curve_examples.csv`.
+- The existing `scripts/plot_dynamic_72h_survival_curves.py` targets the older
+  dynamic pipeline's two-file curve format and does not directly accept the
+  faithful pipeline's row-based `*_curve_examples.csv` format.
+
+### Documentation Updates
+
+- Appended this note only; no experiment, technical decision, priority or
+  repository execution protocol changed.
+
+## 2026-06-14 - DySurv versus Dynamic-DeepHit performance diagnosis
+
+### Scope
+
+- Compared final dynamic results under `outputs/dynamic_72h_bis/final/` and the
+  current faithful DySurv summary without retraining or changing model code.
+- Reviewed the selected Dynamic-DeepHit configuration, training objective and
+  input construction.
+
+### Findings
+
+- Dynamic-DeepHit is stable across seeds: test Ctd `0.7907 +/- 0.0012`, IBS
+  `0.1265 +/- 0.0016`, IBLL `0.3958 +/- 0.0039` and mean horizon C-index
+  `0.7962 +/- 0.0007`.
+- The old DySurv three-seed aggregate is invalid as a normal variability
+  summary because seed 123 collapsed (`Ctd=0`, mean horizon C-index `0.5`).
+- Excluding seed 123 as previously agreed, old DySurv obtains mean test Ctd
+  `0.7568`, mean horizon C-index `0.7703`, IBS `0.1435` and IBLL `0.4547`.
+- Dynamic-DeepHit therefore retains a real but moderate advantage over the two
+  usable old DySurv seeds: about `+0.0339` Ctd, `+0.0258` mean horizon C-index,
+  `-0.0170` IBS and `-0.0589` IBLL.
+- Dynamic-DeepHit directly combines PMF negative log-likelihood and pairwise
+  ranking loss, has tail support, and has no variational KL bottleneck. DySurv
+  must balance survival, reconstruction and KL terms and is susceptible to
+  latent/prediction collapse.
+- The comparison is not architecture-only: Dynamic-DeepHit uses
+  `values_plus_mask_plus_static`, while faithful DySurv intentionally excludes
+  measurement masks from model input. Informative ICU measurement patterns may
+  contribute to Dynamic-DeepHit performance.
+- Against faithful noncollapsed DySurv, the discrimination gap is smaller, but
+  the calibration gap is much larger; faithful DySurv currently overpredicts
+  risk and has seed-dependent probability scale.
+
+### Documentation Updates
+
+- Appended this diagnostic note only.
+- No experiment was run and no technical decision, TODO priority or execution
+  protocol changed, so the other project documents were not modified.
+
+## 2026-06-14 - Dynamic-DeepHit and DySurv loss clarification
+
+### Finding
+
+- Dynamic-DeepHit represents event-time probability with a softmax PMF over 10
+  daily bins plus an explicit tail category. Without that tail category, the
+  softmax would force all probability mass into the evaluated horizon.
+- DySurv does not use an explicit tail output because its LogisticHazard head
+  predicts conditional hazards. Probability beyond day 10 is represented
+  implicitly by the remaining survival probability
+  `S(10) = product_t(1 - hazard_t)`.
+- Therefore both models account for survival beyond the horizon, but through
+  different parameterizations; explicit tail support alone does not establish
+  that Dynamic-DeepHit is intrinsically better calibrated.
+- Dynamic-DeepHit final loss is `0.4 * longitudinal MSE + 0.1 * ranking loss +
+  0.5 * PMF NLL`. Faithful DySurv uses a weighted LogisticHazard NLL,
+  reconstruction loss and variational KL divergence with KL warm-up.
+- The pairwise ranking term directly rewards temporal risk ordering in
+  Dynamic-DeepHit. DySurv has no explicit concordance/ranking term and must also
+  preserve a regularized generative latent representation, explaining its
+  greater optimization tension and collapse sensitivity.
+
+### Documentation Updates
+
+- Appended this clarification only; no experiment, implementation decision,
+  TODO priority or execution protocol changed.
+
+## 2026-06-14 - DySurv loss-weight guidance relative to Dynamic-DeepHit
+
+### Guidance
+
+- DySurv can emphasize temporal probability learning and trajectory structure
+  through `w_surv` and `w_recon`, but its weights are not numerically comparable
+  to Dynamic-DeepHit because the component losses have different raw scales.
+- Dynamic-DeepHit's ranking component has no direct counterpart in DySurv;
+  DySurv's KL term regularizes the latent distribution and must not be treated
+  as an equivalent replacement.
+- A simple conceptually close DySurv trial is `w_surv=0.55`, `w_recon=0.40`,
+  `w_kl=0.05`, retaining KL warm-up. A more conservative alternative is
+  `0.60/0.30/0.10`.
+- `0.50/0.30/0.20` gives substantially more nominal importance to KL and is
+  therefore less similar to Dynamic-DeepHit and more exposed to the collapse
+  behaviour already observed.
+- Comparison should inspect effective contributions `weight * component_loss`,
+  not weights alone, together with Ctd, IBS/IBLL and collapse diagnostics.
+
+### Documentation Updates
+
+- Appended this guidance only; no experiment was run and no configuration or
+  implementation was changed.
+
+## 2026-06-15 - Faithful dynamic model results analysis
+
+### Scope
+
+- Inspected completed outputs for `outputs/dynamic_deephit_faithful_72h/`,
+  `outputs/dysurv_faithful_72h/` and
+  `outputs/dysurv_static_faithful_72h/`.
+- Read configs, selected hyperparameters, tuning results, final seed summaries,
+  per-seed metrics JSONs and complete test survival prediction parquets.
+- No retraining, tuning reruns or model-code changes were performed.
+
+### Main Findings
+
+- Dynamic-DeepHit faithful selected `dynamic_deephit_faithful_cfg_002` and is
+  the best final model overall: test Ctd `0.780743 +/- 0.003989`, mean horizon
+  C-index `0.787014 +/- 0.005717`, IBS `0.121338 +/- 0.001455`, IBLL/NBLL
+  `0.385481 +/- 0.004907`; no collapsed seeds.
+- DySurv faithful selected `dysurv_faithful_cfg_002` and has similar scalar
+  discrimination but much worse calibration: test Ctd `0.777839 +/- 0.002461`,
+  mean horizon C-index `0.776494 +/- 0.008187`, IBS `0.251928 +/- 0.032800`,
+  IBLL/NBLL `0.706178 +/- 0.083272`; no collapsed seeds.
+- DySurv static faithful selected `dysurv_static_faithful_cfg_007` and is a
+  weaker static-only baseline: test Ctd `0.683475 +/- 0.000998`, mean horizon
+  C-index `0.682671 +/- 0.000665`, IBS `0.165585 +/- 0.020709`, IBLL/NBLL
+  `0.499855 +/- 0.047991`; no collapsed seeds.
+- The faithful dataset Kaplan-Meier risk at day 10 is about `0.303` train,
+  `0.299` validation and `0.301` test. Dynamic-DeepHit final predictions have
+  mean day-10 risk around `0.25-0.29`, while DySurv faithful predicts
+  `0.70-0.81` and DySurv static `0.45-0.65`, explaining much of the IBS/IBLL
+  gap.
+- Dynamic-DeepHit tuning was very stable: all 16 candidates completed without
+  collapse and validation Ctd ranged only `0.801221-0.805166`.
+- DySurv faithful tuning contained one clearly collapsed metric-best candidate
+  (`cfg_023`, `std_risk10=0.001069`, `range_risk10=0.007492`) and one near-flat
+  but not flagged candidate (`cfg_017`, `std_risk10=0.005885`) with strong
+  calibration metrics. The accepted noncollapsed candidate was `cfg_002`.
+- DySurv static faithful tuning had no collapse flags. Configurations with
+  longer KL warm-up often had better IBS/IBLL but not always the best Ctd.
+
+### Documentation Updates
+
+- Appended this analysis note only. No experiment was run, no technical
+  decision was made, and no TODO or reproducibility command changed.
+## 2026-06-15 - Dynamic-DeepHit faithful 72h pipeline implementation
+
+### Scope
+
+- Added a separate Dynamic-DeepHit pipeline that reuses
+  `data/processed/dysurv_faithful_72h/` and does not overwrite old dynamic or
+  faithful DySurv outputs.
+- Preserved the reference recurrent embedding, longitudinal next-step head,
+  attention, PMF NLL and ranking loss while adding explicit beyond-horizon tail
+  support and the faithful input convention without mask channels.
+- Added validation-only grid tuning, resume/force controls, collapse-aware
+  selection, exact final seeds 42/123/2026, checkpoints, config snapshots,
+  epoch diagnostics, complete patient predictions, curve examples and audit
+  reporting.
+
+### Validation
+
+- Python compilation passed for all new model, training, script and test files.
+- `pytest tests/test_dynamic_deephit_faithful_72h.py tests/test_dysurv_faithful_72h.py -q`:
+  16 passed.
+- `pytest tests/test_dynamic_deephit_faithful_72h.py tests/test_dynamic_72h_models.py tests/test_deephit_time_dependent_metrics.py -q`:
+  11 passed.
+- Dry-run expanded the intended 16-candidate grid and isolated smoke paths.
+- One 128-patient smoke candidate completed without test evaluation: validation
+  Ctd `0.836520`, IBS `0.126745`, IBLL `0.406526`, mean horizon C-index
+  `0.863040`, `risk10_std=0.150010`, no collapse.
+- Tiny-overfit reduced train PMF NLL from `1.189985` to `0.002844` and retained
+  individualized risks. Its first report-generation attempt failed after
+  training due to helper definition order; the script was fixed and the audit
+  report regenerated without retraining.
+
+### Next Action
+
+- Run the full validation-only grid with `--resume`, review the selected
+  candidate's curves/tail diagnostics, and only then run the three final seeds.
+
+### Documentation Updates
+
+- Added DEC-018 and EXP-017.
+- Updated `docs/TODO.md` and `docs/REPRODUCIBILITY.md` with pending work and
+  commands. `docs/PROJECT_HISTORY.md` was not modified.
+
+## 2026-06-15 - DySurv static faithful 72h implementation
+
+### Scope
+
+- Reviewed the final `DySurv` sections in the GBSG, METABRIC, SUPPORT, NWTCO,
+  SAC3 and SAC_ADMIN benchmark notebooks.
+- Added an isolated static-only MLP-VAE DySurv pipeline using only `X_static`
+  from the exact `dysurv_faithful_72h` split files.
+- Added validation-only tuning/resume, collapse-aware selection, exact final
+  seeds, config snapshots, best/last checkpoints, per-epoch diagnostics,
+  complete predictions, curve examples, dataset identity hashes and audit
+  reporting.
+
+### Methodological Adaptation
+
+- Preserved the shared `F -> 3F -> 5F -> 3F`, latent-20, static decoder and
+  LogisticHazard structure.
+- Kept decoder hidden activations disabled by default, matching the notebooks.
+- Corrected repeated notebook defects: malformed encoder syntax, incompatible
+  scalar/vector loss weights, stochastic evaluation prediction and
+  batch-dependent KL scaling.
+- Used deterministic `mu` for evaluation, per-patient mean KL and explicit
+  survival/reconstruction/KL weights with warm-up.
+
+### Commands and Results
+
+- Python compilation passed for all six new code/config test targets.
+- Focused tests initially found one overly saturated synthetic uniqueness
+  assertion; the diagnostic was stopped earlier and the final suites passed:
+  18 tests, then 20 tests including existing dynamic model compatibility.
+- Dry-run expanded exactly 16 candidates.
+- Smoke command: `python scripts/tune_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --max-runs 1 --sample-size 128 --device cpu --force`.
+- Smoke validation: Ctd `0.690249`, mean horizon C-index `0.690247`, IBS
+  `0.392552`, IBLL `1.092452`, `risk10_std=0.089190`, no collapse, no test.
+- Tiny-overfit command: `python scripts/audit_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --run-tiny-overfit --device cpu`.
+- Tiny-overfit train survival NLL `3.248966 -> 0.362316`, reconstruction MSE
+  `1.026930 -> 0.982480`, final train `risk10_std=0.278752`, no selected
+  collapse.
+
+### Next Action
+
+- Run the full 16-candidate validation grid, inspect reconstruction/curves and
+  collapse diagnostics, then execute seeds 42, 123 and 2026 only after review.
+
+### Documentation Updates
+
+- Added DEC-019 and EXP-018; updated TODO and reproducibility commands.
+- `docs/PROJECT_HISTORY.md` was not modified.
+
+## 2026-06-15 - Final faithful prediction export and experiment log update
+
+### Scope
+
+- Inspected final outputs for Dynamic-DeepHit faithful, temporal DySurv
+  faithful and static DySurv faithful.
+- Confirmed that complete validation/test prediction parquet files already
+  existed for seeds 42, 123 and 2026 in all three pipelines.
+- Created standardized derivative files for every model/seed/split:
+  `*_survival_curves.parquet` and `*_patient_predictions.csv`.
+
+### Checks
+
+- Verified 10 survival columns per curve file.
+- Verified `risk10 = 1 - S(10)` for each patient.
+- Verified unique patient IDs and matching patient order across the three
+  pipelines for the same split and seed.
+- Wrote `outputs/final_faithful_curve_export_audit.json`; no issues were
+  reported.
+
+### Results Logged
+
+- Added EXP-019 to `docs/EXPERIMENT_LOG.md` with selected configs, seeds,
+  aggregate test metrics, per-seed metrics and final interpretation notes.
+- Dynamic-DeepHit faithful remains the best global model among the three final
+  faithful runs.
+- Temporal DySurv faithful has similar discrimination but much worse
+  calibration; static DySurv faithful is weaker in discrimination.
+
+### Documentation Updates
+
+- Updated `docs/EXPERIMENT_LOG.md` and appended this session note.
+- Did not update `docs/DECISIONS.md`, `docs/TODO.md` or
+  `docs/REPRODUCIBILITY.md` because no methodological decision, priority change
+  or new execution protocol was introduced.
+
+## 2026-06-19 — Static time-since-admission flat-feature enrichment
+
+### Purpose
+
+Add a lightweight way to include elapsed hospital time before ICU admission as
+a static covariate without rerunning the full direct MIMIC extraction or
+time-series generation.
+
+### Changes
+
+- Added `scripts/add_time_since_admission_to_flat_features.py`.
+- The script reads the existing `flat_features.csv`, joins raw `icustays` and
+  `admissions`, preserves row order and writes
+  `flat_features_with_time_since_admission.csv`.
+- The script preserves signed raw differences and warns, rather than clamps, if
+  ICU `intime` precedes hospital `admittime`.
+- Updated `configs/static_72h_data.yaml` and `configs/static_data.yaml` to use
+  the enriched flat-feature file and preprocess `time_since_admission_hours` as
+  a numeric static feature.
+- Updated `docs/REPRODUCIBILITY.md` with the enrichment command.
+- Added DEC-021 documenting the data-design decision.
+
+### Validation
+
+- `python scripts/add_time_since_admission_to_flat_features.py` completed with
+  93,502 rows and no missing new covariate values.
+- The enriched file preserves the original `patientunitstayid` order and adds
+  only `time_since_admission_hours`.
+- The script reported 449 negative signed differences where ICU `intime`
+  precedes hospital `admittime`; values were preserved rather than clamped.
+- `py_compile` passed for the new script.
+- Static datasets were not rebuilt in this task.
+
+### Next Action
+
+- Rebuild `static_72h` before rerunning static tuning so the new covariate is
+  included in model inputs.
+## 2026-06-19 - Project Manager planning: parametrizable landmark pipeline
+
+### Context
+- The user requested a documentation/planning-only technical PM assessment for generalizing the current 72h landmark survival modeling pipeline to `landmark_hours = 24, 48, 72`.
+- Scope explicitly excludes code/config/model changes in this session.
+
+### Work performed
+- Reviewed repository governance instructions and current project documentation.
+- Reviewed the documented 72h static, dynamic, DySurv-faithful, Dynamic-DeepHit-faithful and static-DySurv-faithful pipeline state.
+- Inspected relevant configs, scripts and source modules outside excluded artifact folders to identify reusable components, hardcoded 72h assumptions and likely refactor boundaries.
+
+### Outcome
+- Produced an implementation plan for a single parametrizable landmark pipeline preserving the existing 72h pipeline as compatibility reference.
+- No experiments were run.
+- No source code, configs, model artifacts, data, outputs or checkpoints were modified.
+
+## 2026-06-19 — Technical implementation: parametrizable landmark pipeline layer
+
+### Scope
+
+- Added a CLI-driven landmark layer for `landmark_hours` in `{24, 48, 72}`.
+- Preserved existing 72h scripts/configs and kept them usable as compatibility
+  entrypoints.
+- Used the current DEC-021 data definition with
+  `flat_features_with_time_since_admission.csv`; no rollback to older flat
+  features was made.
+
+### Implementation
+
+- Added `src/utils/landmark.py` for landmark validation, path resolution,
+  suffixes and config snapshots.
+- Added generic scripts for static data, dynamic data, DySurv feature filtering,
+  faithful dataset preparation, static tuning/final runs, and faithful
+  tuning/final runs.
+- Made static and dynamic dataset output suffixes configurable while preserving
+  current 72h defaults.
+- Made faithful dataset preparation and faithful loaders accept landmark-specific
+  split filenames instead of requiring 72-step filenames.
+- Added `config_used.yaml` snapshots at landmark/family output roots and
+  per-run tuning roots where applicable.
+
+### Validation
+
+- `py_compile` passed for the new/modified landmark, data, training and script
+  files.
+- `pytest tests/test_landmark_pipeline.py tests/test_static_72h_pipeline.py tests/test_dynamic_72h_dataset.py -q`
+  passed: 10 tests.
+- Dry-runs passed for:
+  - `scripts/tune_landmark_static_models.py --landmark-hours 72 --models kaplan_meier --dry-run --max-runs 1`
+  - `scripts/tune_landmark_dysurv_faithful.py --landmark-hours 72 --dry-run --max-runs 1 --device cpu`
+  - `scripts/tune_landmark_dynamic_deephit_faithful.py --landmark-hours 72 --dry-run --max-runs 1 --device cpu`
+  - `scripts/tune_landmark_dysurv_static_faithful.py --landmark-hours 72 --dry-run --max-runs 1 --device cpu`
+
+### Limitations
+
+- Did not rebuild real `landmark_72h` data, dynamic arrays or faithful datasets
+  in this task to avoid generating/overwriting heavy artifacts.
+- Therefore 72h equivalence is validated at config/unit/dry-run level only;
+  real artifact equivalence remains the next required check before 24h/48h.
+
+### Documentation Updates
+
+- Added DEC-022.
+- Updated `docs/TODO.md` and `docs/REPRODUCIBILITY.md`.
+- Did not modify `docs/PROJECT_HISTORY.md`.
+
+## 2026-06-19 - Static 72h expanded tuning hyperparameter-pruning review
+
+### Scope
+
+- Inspected `outputs/static_72h_tuning_expanded/tuning/` for CoxPH,
+  DeepSurv, LogisticHazard, PCHazard and DeepHitSingle.
+- Read `configs/static_72h_tuning.yaml`, each model's `tuning_results.csv` and
+  `best_hyperparameters.json`.
+- No tuning, final evaluation, model code or config edits were run in this
+  task.
+
+### Findings
+
+- CoxPH: `l1_ratio=0.0` dominates the top configurations; `l1_ratio` values
+  `0.05` and `0.1` slightly but consistently reduce validation Ctd. Penalizer
+  `0.01` is the weakest level; a compact grid can keep `penalizer`
+  `[0.001, 0.003, 0.005]` and fix `l1_ratio=0.0`.
+- DeepSurv: `[64, 32]` is clearly too small and `[128, 64]` is inferior to
+  `[128, 64, 32]`. `dropout=0.0` is worst, and `learning_rate=0.0005` is both
+  duplicated in the YAML and worse than `0.001`. Weight decay has weak effect;
+  `0.0001` is a reasonable fixed value.
+- LogisticHazard: `dropout=0.0` is clearly worse. `[64, 32]` does not appear in
+  the top configurations; `[128, 64]` and `[128, 64, 32]` should be retained.
+  Learning rates are close, but `0.0002` is less represented among top
+  configurations. Weight decay differences are minor.
+- PCHazard: `dropout=0.4` is strongly favored; `0.2` and mostly `0.3` can be
+  dropped. `[256, 128]` is clearly worse than `[64, 32]` and `[128, 64]`.
+  Learning rate `0.0002` is weaker on average; weight decay has minor effect.
+- DeepHitSingle: `[128, 64, 32]` is the strongest architecture; `[128, 64]` is
+  weakest. `dropout=0.2` is clearly inferior, while `0.4` is strongest.
+  `alpha=0.1` gives worse probabilistic metrics than `0.2/0.3`; `0.0002` is the
+  weakest learning rate.
+
+### Documentation Updates
+
+- Appended this review note only. No experiment was run and no source/config
+  change was made.
+
+## 2026-06-19 - Static landmark 24h/48h 16-combination hyperparameter selection
+
+### Scope
+
+- Used `outputs/static_72h_tuning_expanded/tuning/*/tuning_results.csv` to
+  select compact hyperparameter grids intended for reuse at 24h and 48h.
+- Selection prioritized validation Ctd and used IBS/IBLL as secondary evidence,
+  while preserving limited diversity for possible landmark-specific behaviour.
+- No configs, code or outputs were modified.
+
+### Recommendations
+
+- CoxPH: use the 15 tested combinations from `penalizer`
+  `[0.0003, 0.001, 0.003, 0.005, 0.01]` x `l1_ratio`
+  `[0.0, 0.05, 0.1]`, or if exactly 16 are required add a low-risk ridge
+  baseline `penalizer=0.0001, l1_ratio=0.0`.
+- DeepSurv: use 16 combinations from hidden layers
+  `[[128,64], [128,64,32]]`, dropout `[0.1,0.2]`, learning rate
+  `[0.0005,0.001]` and weight decay `[0.0001,0.001]`.
+- LogisticHazard: use 16 combinations from hidden layers
+  `[[128,64], [128,64,32]]`, dropout `[0.1,0.2]`, learning rate
+  `[0.0005,0.0008]` and weight decay `[0.0,0.00001]`.
+- PCHazard: use 16 combinations from hidden layers
+  `[[64,32], [128,64]]`, dropout `[0.3,0.4]`, learning rate
+  `[0.0005,0.0008]` and weight decay `[0.0,0.00001]`.
+- DeepHitSingle: use 16 combinations from hidden layers
+  `[[64,32], [128,64,32]]`, dropout `[0.3,0.4]`, learning rate
+  `[0.0005,0.0008]` and alpha `[0.2,0.3]`, keeping sigma `0.1` and
+  weight decay `0.0`.
+
+### Documentation Updates
+
+- Appended this selection note only. No experiment was run and no source/config
+  change was made.
+
+## 2026-06-19 - Static 72h tuning config grid reduction
+
+### Scope
+
+- Updated `configs/static_72h_tuning.yaml` with the compact grids selected from
+  the expanded 72h tuning review for reuse in 24h/48h landmark experiments.
+
+### Changes
+
+- Kept CoxPH at 15 combinations:
+  `penalizer=[0.0003,0.001,0.003,0.005,0.01]` x
+  `l1_ratio=[0.0,0.05,0.1]`.
+- Reduced DeepSurv to 16 combinations using hidden layers
+  `[[128,64],[128,64,32]]`, dropout `[0.1,0.2]`, learning rate
+  `[0.0005,0.001]` and weight decay `[0.0001,0.001]`.
+- Reduced LogisticHazard, PCHazard and DeepHitSingle to 16 combinations each
+  using the compact grids selected from validation results.
+- Kaplan-Meier remains unchanged as a one-run descriptive baseline.
+
+### Validation
+
+- Parsed `configs/static_72h_tuning.yaml` with PyYAML in `tfg-survival`.
+- Combination counts: Kaplan-Meier `1`, CoxPH `15`, DeepSurv `16`,
+  LogisticHazard `16`, PCHazard `16`, DeepHitSingle `16`.
+
+### Documentation Updates
+
+- Appended this session note only. No experiment was run and no other project
+  document needed an update.
+
+## 2026-06-19 - DySurv faithful 72h tuning config grid reduction
+
+### Scope
+
+- Reviewed `outputs/dysurv_faithful_72h/tuning_results.csv` and updated
+  `configs/dysurv_faithful_72h.yaml` to a compact 16-combination grid for
+  reuse in 24h/48h landmark experiments.
+
+### Findings
+
+- The equal-weight loss setting `w_surv=w_recon=w_kl=0.333` produced apparently
+  attractive IBS/IBLL in some runs but had very low `validation_std_risk10` and
+  included a clearly collapsed metric-best candidate
+  (`dysurv_faithful_cfg_023`, `std_risk10=0.001069`,
+  `range_risk10=0.007492`).
+- The selected final 72h candidate used `learning_rate=0.001`,
+  `dropout=0.1`, `w_surv=0.70`, `w_recon=0.20`, `w_kl=0.10` and
+  `kl_warmup_epochs=50`.
+- `kl_warmup_epochs=50` was retained as the safer default because it preserved
+  the accepted candidate and avoided the clearest collapsed selection.
+
+### Changes
+
+- Removed the equal-weight `0.333/0.333/0.333` loss setting.
+- Retained the previously configured `0.50/0.30/0.20` exploratory setting.
+- Added a new reconstruction-emphasizing, low-KL setting:
+  `w_surv=0.55`, `w_recon=0.40`, `w_kl=0.05`.
+- Fixed `kl_warmup_epochs` to `[50]`.
+- Final grid count is exactly 16:
+  `2 learning rates x 2 dropouts x 4 loss-weight settings x 1 warm-up`.
+
+### Validation
+
+- Parsed `configs/dysurv_faithful_72h.yaml` with PyYAML in `tfg-survival`.
+- Confirmed total tuning combinations: `16`.
+
+### Documentation Updates
+
+- Appended this session note only. No experiment was run and no other project
+  document needed an update.
+
+## 2026-06-19 - Dynamic-DeepHit and static DySurv faithful grid refinement
+
+### Scope
+
+- Reviewed `outputs/dynamic_deephit_faithful_72h/tuning_results.csv` and
+  `outputs/dysurv_static_faithful_72h/tuning_results.csv`.
+- Updated `configs/dynamic_deephit_faithful_72h.yaml` and
+  `configs/dysurv_static_faithful_72h.yaml` while keeping each tuning grid at
+  exactly 16 combinations.
+
+### Findings and Changes
+
+- Dynamic-DeepHit faithful: all 16 previous candidates completed without
+  collapse, but `sigma=0.2` dominated `sigma=0.1` on validation Ctd, mean
+  horizon C-index, IBS and IBLL. Fixed `sigma` to `[0.2]`.
+- Dynamic-DeepHit faithful: expanded loss-weight options to four balances:
+  `(alpha_ranking,beta_nll) = (0.10,0.50), (0.10,0.60), (0.20,0.50),
+  (0.20,0.60)`. The two original settings are preserved and two intermediate
+  ranking/NLL balances are added.
+- Static DySurv faithful: `learning_rate=0.0005` was clearly worse than
+  `0.001` on validation Ctd, IBS and IBLL. Fixed learning rate to `[0.001]`.
+- Static DySurv faithful: retained the two original loss weights and added two
+  nearby survival/KL-low settings around the best observed region:
+  `0.75/0.20/0.05` and `0.85/0.10/0.05`.
+
+### Validation
+
+- Parsed both YAML configs with PyYAML in `tfg-survival`.
+- Confirmed total combinations:
+  `dynamic_deephit_faithful_72h = 16`,
+  `dysurv_static_faithful_72h = 16`.
+
+### Documentation Updates
+
+- Appended this session note only. No experiment was run and no other project
+  document needed an update.
+
+## 2026-06-19 - Static DySurv learning-rate and KL warm-up adjustment
+
+### Scope
+
+- Updated `configs/dysurv_static_faithful_72h.yaml` per user request while
+  preserving the compact 16-combination tuning budget.
+
+### Changes
+
+- Changed static DySurv `learning_rate` from `[0.001]` to
+  `[0.001, 0.0005]`.
+- Changed static DySurv `kl_warmup_epochs` from `[20, 50]` to `[50]`.
+- Static DySurv now keeps 16 combinations:
+  `2 learning rates x 2 dropouts x 4 loss-weight settings x 1 warm-up`.
+
+### Loss-Weight Note
+
+- Static DySurv and dynamic DySurv do not use exactly the same loss-weight
+  grid.
+- Shared settings: `0.70/0.20/0.10` and `0.80/0.15/0.05`
+  for `w_surv/w_recon/w_kl`.
+- Dynamic DySurv additionally keeps reconstruction-heavy temporal settings:
+  `0.50/0.30/0.20` and `0.55/0.40/0.05`.
+- Static DySurv additionally keeps high-survival, low-KL settings:
+  `0.75/0.20/0.05` and `0.85/0.10/0.05`.
+
+### Validation
+
+- Parsed `configs/dysurv_static_faithful_72h.yaml` and
+  `configs/dysurv_faithful_72h.yaml` with PyYAML in `tfg-survival`.
+- Confirmed total combinations:
+  `dysurv_static_faithful_72h = 16`,
+  `dysurv_faithful_72h = 16`.
+
+### Documentation Updates
+
+- Appended this session note only. No experiment was run and no other project
+  document needed an update.
+
+## 2026-06-19 - Common DySurv loss-weight grid
+
+### Scope
+
+- Updated `configs/dysurv_faithful_72h.yaml` so temporal DySurv faithful uses
+  the same `loss_weights` grid as `configs/dysurv_static_faithful_72h.yaml`.
+
+### Tuning-Based Rationale
+
+- Existing temporal DySurv tuning supported `0.70/0.20/0.10` as the accepted
+  non-collapsed candidate and `0.80/0.15/0.05` as a close stable alternative.
+- Existing static DySurv tuning favored `0.80/0.15/0.05`, with
+  `0.70/0.20/0.10` close behind.
+- Equal-weight temporal DySurv candidates were avoided because they included
+  suspicious low-risk-dispersion or collapsed behavior.
+- The final common grid keeps the two strongest observed regions and two nearby
+  high-survival, low-KL variants:
+  `0.70/0.20/0.10`, `0.75/0.20/0.05`, `0.80/0.15/0.05`,
+  `0.85/0.10/0.05`.
+
+### Validation
+
+- Parsed `configs/dysurv_faithful_72h.yaml` and
+  `configs/dysurv_static_faithful_72h.yaml` with PyYAML in `tfg-survival`.
+- Confirmed both configs have identical `loss_weights`.
+- Confirmed both configs still expand to 16 tuning combinations.
+
+### Documentation Updates
+
+- Added DEC-023 to `docs/DECISIONS.md`.
+- Did not update `docs/EXPERIMENT_LOG.md` because no experiment was run.
+- Did not update `docs/TODO.md` or `docs/REPRODUCIBILITY.md` because no new
+  priority or execution command was introduced.

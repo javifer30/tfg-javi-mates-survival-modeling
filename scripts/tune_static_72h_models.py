@@ -55,6 +55,7 @@ def _run_config(tuning_config, model_name, config_id, hyperparameters, output_di
         "paths": {
             "processed_dir": tuning_config["paths"]["processed_dir"],
             "outputs_dir": str(output_dir),
+            "static_file_suffix": tuning_config.get("static_file_suffix", "static_72h"),
         },
         "model": {"name": model_name, **copy.deepcopy(hyperparameters)},
         "evaluation": {
@@ -82,6 +83,7 @@ def save_config_snapshot(run_config, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "config_snapshot.yaml"
     path.write_text(yaml.safe_dump(run_config, sort_keys=False), encoding="utf-8")
+    (output_dir / "config_used.yaml").write_text(yaml.safe_dump(run_config, sort_keys=False), encoding="utf-8")
     return path
 
 
@@ -132,7 +134,26 @@ def select_best_row(rows):
     )[0]
 
 
-def tune_models(config_path, requested_models=None, dry_run=False, max_runs=None):
+def _existing_rows(path):
+    if not path.exists():
+        return []
+    frame = pd.read_csv(path)
+    return frame.astype(object).where(pd.notna(frame), None).to_dict(orient="records")
+
+
+def _completed_hyperparameters(rows):
+    completed = set()
+    for row in rows:
+        if row.get("status") != "completed":
+            continue
+        try:
+            completed.add(json.dumps(json.loads(row["hyperparameters"]), sort_keys=True))
+        except (KeyError, TypeError, json.JSONDecodeError):
+            continue
+    return completed
+
+
+def tune_models(config_path, requested_models=None, dry_run=False, max_runs=None, resume=False):
     logger = get_logger("tune_static_72h_models")
     tuning_config = load_yaml(config_path)
     seed = int(tuning_config["tuning"].get("seed", 42))
@@ -141,8 +162,16 @@ def tune_models(config_path, requested_models=None, dry_run=False, max_runs=None
     run_count = 0
 
     for model_name in _model_list(tuning_config, requested_models):
+        model_dir = output_root / model_name
+        results_path = model_dir / "tuning_results.csv"
+        existing_rows = _existing_rows(results_path) if resume else []
+        completed = _completed_hyperparameters(existing_rows)
         rows = []
         for index, hyperparameters in enumerate(expand_grid(tuning_config["models"][model_name].get("grid", {})), start=1):
+            signature = json.dumps(hyperparameters, sort_keys=True)
+            if resume and signature in completed:
+                logger.info("Skipping completed static_72h candidate: %s cfg %03d", model_name, index)
+                continue
             if max_runs is not None and run_count >= int(max_runs):
                 break
             config_id = f"{model_name}_cfg_{index:03d}"
@@ -153,6 +182,7 @@ def tune_models(config_path, requested_models=None, dry_run=False, max_runs=None
             if dry_run:
                 continue
             save_config_snapshot(run_config, run_dir)
+            (run_dir.parent / "config_used.yaml").write_text(yaml.safe_dump(run_config, sort_keys=False), encoding="utf-8")
             try:
                 resolved = _resolve_config_paths(copy.deepcopy(run_config))
                 set_seed(seed)
@@ -162,11 +192,11 @@ def tune_models(config_path, requested_models=None, dry_run=False, max_runs=None
                 logger.warning("static_72h tuning candidate failed: %s %s: %s", model_name, config_id, exc)
                 rows.append(tuning_row(model_name, config_id, hyperparameters, seed, "failed", run_dir, error=repr(exc)))
 
-        if rows:
-            model_dir = output_root / model_name
+        combined_rows = existing_rows + rows if resume else rows
+        if combined_rows and not dry_run:
             model_dir.mkdir(parents=True, exist_ok=True)
-            pd.DataFrame(rows).to_csv(model_dir / "tuning_results.csv", index=False)
-            best = select_best_row(rows)
+            pd.DataFrame(combined_rows).to_csv(results_path, index=False)
+            best = select_best_row(combined_rows)
             (model_dir / "best_hyperparameters.json").write_text(json.dumps(best, indent=2), encoding="utf-8")
     return planned
 
@@ -177,8 +207,9 @@ def main():
     parser.add_argument("--models", nargs="*", help="Subset of models to tune.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-runs", type=int, default=None)
+    parser.add_argument("--resume", action="store_true", help="Skip completed hyperparameter combinations.")
     args = parser.parse_args()
-    planned = tune_models(args.config, requested_models=args.models, dry_run=args.dry_run, max_runs=args.max_runs)
+    planned = tune_models(args.config, requested_models=args.models, dry_run=args.dry_run, max_runs=args.max_runs, resume=args.resume)
     if args.dry_run:
         print(json.dumps(planned, indent=2))
 

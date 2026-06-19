@@ -50,9 +50,13 @@ tuning:
     loss_weights:
       - alpha_ranking: 0.10
         beta_nll: 0.50
+      - alpha_ranking: 0.10
+        beta_nll: 0.60
+      - alpha_ranking: 0.20
+        beta_nll: 0.50
       - alpha_ranking: 0.20
         beta_nll: 0.60
-    sigma: [0.1, 0.2]
+    sigma: [0.2]
 
 collapse:
   std_risk10_threshold: 0.005

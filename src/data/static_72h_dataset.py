@@ -221,7 +221,7 @@ def validate_static_72h_datasets(train_df, val_df, test_df, max_horizon_days=10.
         if list(df.columns) != columns:
             raise ValueError(f"{name} columns do not match train columns")
         if not (df[REL_DURATION_DAYS_COL] > 0).all():
-            raise ValueError(f"{name} contains patients not observable after 72h")
+            raise ValueError(f"{name} contains patients not observable after the landmark")
         if not (df[DURATION_COL] > 0).all():
             raise ValueError(f"{name} duration_eval_days must be positive")
         if not (df[DURATION_COL] <= float(max_horizon_days)).all():
@@ -236,13 +236,14 @@ def validate_static_72h_datasets(train_df, val_df, test_df, max_horizon_days=10.
 
 
 def build_summary(train_df, val_df, test_df, preprocessor, config):
+    pred_hours = float(config["target"]["prediction_time_hours"])
     summary = {
-        "pipeline": "static_72h_pycox",
+        "pipeline": config.get("experiment", {}).get("name", "static_72h_pycox"),
         "methodology": {
-            "prediction_time_hours": float(config["target"]["prediction_time_hours"]),
+            "prediction_time_hours": pred_hours,
             "max_horizon_days": float(config["target"]["max_horizon_days"]),
-            "time_unit": "days since hour 72",
-            "inclusion_rule": "duration_from_admission_hours > 72",
+            "time_unit": f"days since hour {int(pred_hours)}",
+            "inclusion_rule": f"raw_duration_hours > {int(pred_hours)}",
         },
         "feature_columns": preprocessor.feature_cols_,
         "n_features": len(preprocessor.feature_cols_),
@@ -262,7 +263,7 @@ def build_summary(train_df, val_df, test_df, preprocessor, config):
         events = int(df[EVENT_COL].sum())
         summary["splits"][name] = {
             "n_patients": n,
-            "events_within_10d_after_72h": events,
+            "events_within_10d_after_landmark": events,
             "administratively_censored_or_censored": int(n - events),
             "event_rate": float(events / n) if n else 0.0,
             "min_duration_eval_days": float(df[DURATION_COL].min()),
@@ -285,9 +286,10 @@ def build_static_72h_dataset(config, logger):
     paths = config["paths"]
     output_dir = Path(paths["processed_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
-    train.to_parquet(output_dir / "train_static_72h.parquet", index=False)
-    val.to_parquet(output_dir / "val_static_72h.parquet", index=False)
-    test.to_parquet(output_dir / "test_static_72h.parquet", index=False)
+    suffix = config.get("output_file_suffix", "static_72h")
+    train.to_parquet(output_dir / f"train_{suffix}.parquet", index=False)
+    val.to_parquet(output_dir / f"val_{suffix}.parquet", index=False)
+    test.to_parquet(output_dir / f"test_{suffix}.parquet", index=False)
 
     split_assignments = pd.concat(
         [

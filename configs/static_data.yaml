@@ -1,7 +1,7 @@
 seed: 42
 
 paths:
-  flat_features_path: data/processed/mimic_extraction/flat_features.csv
+  flat_features_path: data/processed/mimic_extraction/flat_features_with_time_since_admission.csv
   labels_path: data/processed/mimic_extraction/labels.csv
   processed_static_dir: data/processed/static
   preprocessor_path: outputs/preprocessors/static_preprocessor.pkl
@@ -39,6 +39,7 @@ preprocessing:
   minmax_cols:
     - weight
     - age
+    - time_since_admission_hours
     - hour
     - eyes
     - motor

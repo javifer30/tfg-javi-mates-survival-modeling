@@ -43,6 +43,22 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 
 ## High Priority
 
+### Parametrizable landmark pipeline
+
+- [x] Add CLI-driven landmark wrappers for static data, dynamic data, faithful
+      preparation, static tuning/final runs and faithful tuning/final runs.
+- [x] Preserve existing 72h scripts while adding landmark-specific paths under
+      `data/processed/landmark_<s>h/` and `outputs/landmark_<s>h/`.
+- [x] Add lightweight tests for landmark config resolution, target formula and
+      variable-length faithful preparation.
+- [ ] Rebuild `landmark_72h` datasets and compare against current 72h artifacts:
+      split IDs, targets, static columns, dynamic sequence length, temporal
+      feature names and no post-landmark offsets.
+- [ ] Only after 72h equivalence passes, build `landmark_24h` and
+      `landmark_48h`.
+- [ ] Run dry-run/smoke tuning for all static and faithful model families at
+      24h and 48h before launching long tuning.
+
 ### DeepHit calibration review
 
 - [x] Investigate and implement explicit tail mass beyond prediction horizon.
@@ -57,6 +73,8 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 - [ ] Tune DeepHit hyperparameters after diagnostics.
 
 - [ ] Run the new `static_72h_pycox` data build on real MIMIC-derived inputs.
+- [ ] Rebuild `static_72h_pycox` after adding
+      `time_since_admission_hours` to the enriched flat-feature source.
 - [ ] Rerun validation-only tuning for the new `static_72h_pycox` models after
       the 2026-06-12 audit fixes to PCHazard `sub=10` and IBS/IBLL integration
       grids.
@@ -68,19 +86,40 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
       `dynamic_72h_dysurv_features`.
 - [ ] Inspect dynamic smoke/final candidate calibration and survival curves
       before final 3-seed evaluation.
-- [ ] Block final DySurv interpretation until the posterior-collapse findings
-      in `outputs/dynamic_72h/dysurv_audit_report.md` are addressed.
+- [x] Address the posterior-collapse findings from the previous DySurv
+      adaptation with the isolated faithful pipeline; retain the old collapsed
+      runs as historical/debug outputs only.
 - [x] Add DySurv checkpoint/full-prediction saving and latent/risk dispersion
       diagnostics before rerunning validation tuning.
 - [x] Revise the DySurv reconstruction target so masks and repeated unscaled
       static covariates do not dominate the VAE objective; rerun tiny-overfit
       and smoke validation in the isolated faithful pipeline.
-- [ ] Run the 16-candidate validation-only
+- [x] Run the 16-candidate validation-only
       `dysurv_faithful_72h` tuning grid on GPU.
-- [ ] Review faithful tuning survival curves and collapse diagnostics, then
+- [x] Review faithful tuning survival curves and collapse diagnostics, then
       accept or reject the selected validation candidate.
-- [ ] Run faithful final seeds 42, 123 and 2026 only after validation review.
+- [x] Run faithful final seeds 42, 123 and 2026 after validation review.
 - [ ] Run final 3-seed dynamic_72h evaluation after validation tuning.
+- [x] Implement and smoke-test the isolated
+      `dynamic_deephit_faithful_72h` pipeline on the exact faithful DySurv
+      train/validation/test dataset, with checkpoints, complete predictions,
+      tail diagnostics and tiny-overfit controls — 2026-06-15.
+- [ ] Run the full 16-candidate validation-only
+      `dynamic_deephit_faithful_72h` tuning grid.
+- [ ] Review Dynamic-DeepHit-faithful survival curves, tail probabilities and
+      collapse diagnostics before accepting the validation selection.
+- [ ] Run Dynamic-DeepHit-faithful final seeds 42, 123 and 2026 after the
+      validation review.
+- [x] Implement and smoke-test the isolated
+      `dysurv_static_faithful_72h` MLP-VAE pipeline on the exact faithful
+      DySurv split files, including six-notebook audit, collapse diagnostics,
+      checkpoints and full prediction support — 2026-06-15.
+- [ ] Run the full 16-candidate validation-only
+      `dysurv_static_faithful_72h` tuning grid.
+- [ ] Review static DySurv curves, reconstruction behaviour and collapse
+      diagnostics before accepting the validation selection.
+- [ ] Run static DySurv faithful final seeds 42, 123 and 2026 after validation
+      review, then compare directly with temporal faithful DySurv.
 - [ ] Decide whether dynamic models require `delta_seq` or another
       time-since-last-observed representation before training.
 - [ ] Decide whether the thesis requires full dynamic model training, then
@@ -111,6 +150,14 @@ work. It should stay actionable and aligned with [PROJECT_HISTORY.md](PROJECT_HI
 
 ## Done Recently
 
+- [x] Implemented and smoke-tested `dysurv_static_faithful_72h` using only the
+      28 static covariates from the exact faithful cohort/splits, with MLP-VAE
+      reconstruction, LogisticHazard, KL warm-up and auditable outputs —
+      2026-06-15
+- [x] Implemented and smoke-tested the isolated
+      `dynamic_deephit_faithful_72h` pipeline using the faithful DySurv dataset,
+      validation-only tuning, explicit tail support and complete auditable
+      prediction artifacts — 2026-06-15
 - [x] Implemented, prepared and smoke-tested the isolated
       `dysurv_faithful_72h` pipeline with recurrent temporal-only
       reconstruction, train-only imputation, collapse-aware selection,

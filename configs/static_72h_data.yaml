@@ -1,7 +1,7 @@
 seed: 42
 
 paths:
-  flat_features_path: data/processed/mimic_extraction/flat_features.csv
+  flat_features_path: data/processed/mimic_extraction/flat_features_with_time_since_admission.csv
   labels_path: data/processed/mimic_extraction/labels.csv
   processed_dir: data/processed/static_72h
   preprocessor_path: outputs/static_72h/preprocessors/static_72h_preprocessor.pkl
@@ -43,6 +43,7 @@ preprocessing:
     - age
     - height
     - weight
+    - time_since_admission_hours
   leave_numeric_cols:
     - hour
     - eyes

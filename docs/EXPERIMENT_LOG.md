@@ -971,3 +971,206 @@ C:\Users\Javi\miniconda3\envs\tfg-survival\python.exe scripts/tune_dysurv_faithf
   collapse-aware checkpoint selection is necessary.
 - These metrics are smoke diagnostics only and must not be used as final model
   evidence.
+
+## EXP-016 — Full DySurv-faithful tuning and final three-seed evaluation
+
+Date: 2026-06-14
+Status: completed
+Model: DySurv faithful 72h
+Dataset: `dysurv_faithful_72h`
+Config: `configs/dysurv_faithful_72h.yaml`
+Seeds: tuning `42`; final `42`, `123`, `2026`
+Run directory: `outputs/dysurv_faithful_72h/`
+Related decision: DEC-016
+
+### Selection
+
+- Completed all 16 validation-only candidates without loading test data.
+- Selected `dysurv_faithful_cfg_002` by validation Ctd Antolini, with IBLL as
+  tiebreaker and preference for non-collapsed candidates.
+- Hyperparameters: learning rate `0.001`, dropout `0.1`, weight decay `0.0001`,
+  batch size `128`, KL warm-up `50`, and loss weights survival/reconstruction/KL
+  `0.70/0.20/0.10`.
+- Selected validation metrics: Ctd `0.787732`, mean horizon C-index `0.791629`,
+  IBS `0.298985`, IBLL/NBLL `0.825261`.
+- None of the 16 candidates was flagged as collapsed.
+
+### Final results
+
+- Mean test Ctd Antolini: `0.777839` (stored std `0.002461`).
+- Mean test horizon C-index: `0.776494` (stored std `0.008187`).
+- Mean test IBS: `0.251928` (stored std `0.032800`).
+- Mean test IBLL/NBLL: `0.706178` (stored std `0.083272`).
+- No final seed was flagged as collapsed. Mean test risk10 standard deviation
+  was `0.125594`, with mean range `0.604031`.
+- Horizon discrimination decreased from mean C-index `0.811680` at day 1 to
+  `0.750409` at day 10.
+
+### Interpretation
+
+- The faithful adaptation resolves the previous near-constant prediction and
+  posterior-collapse failure and provides individualized, monotone curves.
+- Discrimination is stable across seeds, but probabilistic quality is weaker
+  and more seed-dependent.
+- Mean predicted 10-day risk was approximately `0.813`, `0.717` and `0.696`
+  for seeds 42, 123 and 2026, respectively, while the observed event indicator
+  rate was `0.137`. Together with IBS/IBLL, this indicates substantial absolute
+  risk miscalibration/overprediction despite useful ranking.
+- Final interpretation should therefore separate discrimination from
+  calibration and should not describe this model as globally superior.
+## EXP-017 — Dynamic-DeepHit-faithful smoke and tiny-overfit validation
+
+**Date:** 2026-06-15
+
+**Purpose:** Verify that the isolated Dynamic-DeepHit adaptation can train on
+the faithful 72h dataset, save auditable artifacts, produce individualized
+curves and overfit a small sample before full validation tuning.
+
+**Config:** `configs/dynamic_deephit_faithful_72h.yaml`
+
+**Commands:**
+
+```bash
+python scripts/tune_dynamic_deephit_faithful_72h.py --config configs/dynamic_deephit_faithful_72h.yaml --max-runs 1 --sample-size 128 --device cpu --force
+python scripts/audit_dynamic_deephit_faithful_72h.py --config configs/dynamic_deephit_faithful_72h.yaml --run-tiny-overfit --device cpu
+python scripts/audit_dynamic_deephit_faithful_72h.py --config configs/dynamic_deephit_faithful_72h.yaml
+```
+
+**Results:** The smoke candidate completed with validation Ctd `0.836520`,
+IBS `0.126745`, IBLL/NBLL `0.406526`, mean horizon C-index `0.863040`,
+`risk10_std=0.150010`, 128 unique rounded risks and no collapse flag. Test was
+not evaluated. The 64-patient tiny-overfit reduced train total loss from
+`1.095767` to `0.021100` and train PMF NLL from `1.189985` to `0.002844`; final
+train `risk10_std=0.374864`, confirming nonconstant individualized output.
+
+The first audit command completed training but exited during report generation
+because a boolean parsing helper was defined after the script entry point. The
+helper order was corrected and the report was regenerated successfully without
+retraining. These reduced-sample metrics are diagnostics, not final model
+results.
+
+**Outputs:** `outputs/dynamic_deephit_faithful_72h/smoke/`,
+`outputs/dynamic_deephit_faithful_72h/tiny_overfit/` and
+`outputs/dynamic_deephit_faithful_72h/dynamic_deephit_faithful_audit_report.md`.
+
+**Decision:** Proceed to full validation-only tuning; do not run final seeds
+until the selected validation candidate and its probability diagnostics have
+been reviewed. See DEC-018.
+
+## EXP-018 — DySurv static faithful smoke and tiny-overfit validation
+
+**Date:** 2026-06-15
+
+**Purpose:** Validate the isolated static-only MLP-VAE DySurv implementation on
+the exact faithful 72h cohort before full tuning.
+
+**Config:** `configs/dysurv_static_faithful_72h.yaml`
+
+**Commands:**
+
+```bash
+python scripts/tune_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --dry-run --device cpu
+python scripts/tune_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --max-runs 1 --sample-size 128 --device cpu --force
+python scripts/audit_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --run-tiny-overfit --device cpu
+```
+
+**Dataset:** The existing `data/processed/dysurv_faithful_72h/` split files,
+with train/validation/test patient counts `18706/6236/6236` and 28
+train-standardized static covariates. Ordered ID and target hashes are stored
+in `outputs/dysurv_static_faithful_72h/audit/dataset_identity.json`.
+
+**Results:** The 128-patient smoke candidate completed without loading test.
+Its selected validation metrics were Ctd `0.690249`, mean horizon C-index
+`0.690247`, IBS `0.392552`, IBLL/NBLL `1.092452`, `risk10_std=0.089190` and
+127 unique rounded risks; no collapse flag was triggered. The 64-patient
+tiny-overfit reduced train survival NLL from `3.248966` to `0.362316` and
+static reconstruction MSE from `1.026930` to `0.982480`; final train
+`risk10_std=0.278752` and the selected validation epoch was non-collapsed.
+
+These reduced-sample results are implementation diagnostics, not final model
+performance. Full 16-candidate tuning and final seeds were not run.
+
+**Outputs:** `outputs/dysurv_static_faithful_72h/smoke/`,
+`outputs/dysurv_static_faithful_72h/audit/tiny_overfit/` and
+`outputs/dysurv_static_faithful_72h/dysurv_static_faithful_audit_report.md`.
+
+**Decision:** Proceed to full validation-only tuning, inspect curves and
+collapse diagnostics, then run final seeds only after accepting the selected
+candidate. See DEC-019.
+
+## EXP-019 — Final faithful model prediction export and result inspection
+
+**Date:** 2026-06-15
+
+**Purpose:** Verify and standardize complete validation/test survival-curve
+exports for the final faithful Dynamic-DeepHit, temporal DySurv and static
+DySurv runs, and document final metrics already present in the output
+artifacts.
+
+**Models and selected configs:**
+
+- Dynamic-DeepHit faithful: `dynamic_deephit_faithful_cfg_002`; hyperparameters
+  `learning_rate=0.001`, `dropout=0.1`, `weight_decay=0.0001`,
+  `batch_size=128`, `alpha_ranking=0.1`, `beta_nll=0.5`, `sigma=0.2`.
+- DySurv faithful temporal: `dysurv_faithful_cfg_002`; hyperparameters
+  `learning_rate=0.001`, `dropout=0.1`, `weight_decay=0.0001`,
+  `batch_size=128`, `kl_warmup_epochs=50`, loss weights `0.70/0.20/0.10`.
+- DySurv static faithful: `dysurv_static_faithful_cfg_007`; hyperparameters
+  `learning_rate=0.001`, `dropout=0.1`, `weight_decay=0.0001`,
+  `batch_size=256`, `kl_warmup_epochs=20`, loss weights `0.80/0.15/0.05`.
+
+**Seeds:** `42`, `123`, `2026`.
+
+**Final aggregate test metrics:**
+
+- Dynamic-DeepHit faithful: Ctd `0.780743 +/- 0.003989`, mean horizon C-index
+  `0.787014 +/- 0.005717`, IBS `0.121338 +/- 0.001455`, IBLL/NBLL
+  `0.385481 +/- 0.004907`; no collapsed seeds.
+- DySurv faithful temporal: Ctd `0.777839 +/- 0.002461`, mean horizon C-index
+  `0.776494 +/- 0.008187`, IBS `0.251928 +/- 0.032800`, IBLL/NBLL
+  `0.706178 +/- 0.083272`; no collapsed seeds.
+- DySurv static faithful: Ctd `0.683475 +/- 0.000998`, mean horizon C-index
+  `0.682671 +/- 0.000665`, IBS `0.165585 +/- 0.020709`, IBLL/NBLL
+  `0.499855 +/- 0.047991`; no collapsed seeds.
+
+**Per-seed test metrics:**
+
+| Model | Seed | Ctd | Mean horizon C-index | IBS | IBLL/NBLL | Collapse |
+|---|---:|---:|---:|---:|---:|---|
+| Dynamic-DeepHit faithful | 42 | 0.775156 | 0.779323 | 0.123386 | 0.392381 | false |
+| Dynamic-DeepHit faithful | 123 | 0.782861 | 0.788699 | 0.120151 | 0.382679 | false |
+| Dynamic-DeepHit faithful | 2026 | 0.784212 | 0.793021 | 0.120477 | 0.381384 | false |
+| DySurv faithful temporal | 42 | 0.775757 | 0.777275 | 0.297286 | 0.821111 | false |
+| DySurv faithful temporal | 123 | 0.781294 | 0.786108 | 0.237660 | 0.670936 | false |
+| DySurv faithful temporal | 2026 | 0.776464 | 0.766100 | 0.220838 | 0.626485 | false |
+| DySurv static faithful | 42 | 0.683393 | 0.682379 | 0.189751 | 0.556476 | false |
+| DySurv static faithful | 123 | 0.684737 | 0.683591 | 0.167831 | 0.503953 | false |
+| DySurv static faithful | 2026 | 0.682296 | 0.682043 | 0.139174 | 0.439136 | false |
+
+**Prediction exports:** Existing complete prediction parquet files were found
+for validation and test in all three models and all final seeds. Standardized
+derivative files were created under each
+`outputs/<pipeline>/final/seed_<seed>/predictions/` directory:
+`validation_survival_curves.parquet`, `test_survival_curves.parquet`,
+`validation_patient_predictions.csv` and `test_patient_predictions.csv`.
+The export audit is stored in `outputs/final_faithful_curve_export_audit.json`.
+
+**Orientation and completeness audit:** All checked files contained 10 survival
+columns, `patient_id`, observed relative duration, event indicator and `risk10`.
+For every checked split/seed/model, `risk10` matched `1 - S(10)` within
+tolerance, patient IDs were unique, and patient order matched across the three
+pipelines for the same split and seed. No missing final prediction outputs were
+detected.
+
+**Calibration and interpretation:** Dynamic-DeepHit faithful is the best global
+model among these final faithful runs because it combines the highest aggregate
+test discrimination with clearly superior IBS/IBLL. Temporal DySurv faithful has
+good discrimination, close to Dynamic-DeepHit, but poor probability calibration
+and substantially worse IBS/IBLL. Static DySurv faithful is an inferior baseline
+in discrimination, although its calibration metrics are better than temporal
+DySurv and worse than Dynamic-DeepHit.
+
+**Finality warning:** These results should be treated as final only conditional
+on the completed audit assumptions: correct risk orientation, validation-only
+tuning without test selection, and identical faithful split/patient ordering
+across the compared models.

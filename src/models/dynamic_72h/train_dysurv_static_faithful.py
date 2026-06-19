@@ -26,6 +26,7 @@ from src.models.dynamic_72h.losses import hazards_to_survival, logistic_hazard_n
 from src.models.dynamic_72h.predict import survival_df_from_array
 from src.models.dynamic_72h.train_dysurv_faithful import (
     _distribution_stats,
+    _faithful_split_files,
     _save_curve_examples,
     collapse_flags,
     effective_kl_weight,
@@ -46,9 +47,11 @@ def load_static_faithful_split(
     dataset_dir: str | Path,
     split: str,
     sample_size: int | None = None,
+    split_files: dict[str, str] | None = None,
 ) -> StaticFaithfulSplit:
     file_split = "val" if split == "validation" else split
-    path = Path(dataset_dir) / f"{file_split}_dynamic_72h.npz"
+    filename = (split_files or _faithful_split_files()).get(split, f"{file_split}_dynamic_72h.npz")
+    path = Path(dataset_dir) / filename
     with np.load(path) as data:
         patient_ids = data["patient_ids"]
         x_static = data["X_static"].astype("float32", copy=False)
@@ -137,8 +140,8 @@ def validate_static_splits(
     ]
     if not all(overlap_checks):
         raise ValueError(f"Split overlap detected: {checks}")
-    if metadata.get("dataset") != "dysurv_faithful_72h":
-        raise ValueError("Static-only pipeline must reuse dysurv_faithful_72h")
+    if not str(metadata.get("dataset", "")).startswith("dysurv_faithful_"):
+        raise ValueError("Static-only pipeline must reuse a dysurv_faithful landmark dataset")
     return checks
 
 
@@ -267,9 +270,10 @@ def train_dysurv_static_faithful(config: dict, logger) -> dict:
         raise ValueError("Test data cannot be loaded during tuning")
     dataset_dir = config["paths"]["prepared_dataset_dir"]
     sample_size = config.get("sample_size")
-    train = load_static_faithful_split(dataset_dir, "train", sample_size)
-    validation = load_static_faithful_split(dataset_dir, "validation", sample_size)
-    test = load_static_faithful_split(dataset_dir, "test", sample_size) if include_test else None
+    split_files = _faithful_split_files(config)
+    train = load_static_faithful_split(dataset_dir, "train", sample_size, split_files)
+    validation = load_static_faithful_split(dataset_dir, "validation", sample_size, split_files)
+    test = load_static_faithful_split(dataset_dir, "test", sample_size, split_files) if include_test else None
     checks = validate_static_splits(train, validation, test, dataset_dir)
     params = config["params"]
     fixed = config["model_fixed"]
@@ -295,6 +299,7 @@ def train_dysurv_static_faithful(config: dict, logger) -> dict:
     for folder in ["checkpoints", "metrics", "audit"]:
         (output_dir / folder).mkdir(parents=True, exist_ok=True)
     save_yaml(output_dir / "config_snapshot.yaml", config)
+    save_yaml(output_dir / "config_used.yaml", config)
     save_json(output_dir / "audit" / "data_and_leakage_checks.json", checks)
 
     history = []

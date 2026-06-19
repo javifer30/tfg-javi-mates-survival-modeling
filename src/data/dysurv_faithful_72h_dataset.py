@@ -25,8 +25,15 @@ SPLIT_FILES = {
 }
 
 
-def load_source_split(source_dir: str | Path, split: str) -> dict[str, np.ndarray]:
-    path = Path(source_dir) / SPLIT_FILES[split]
+def split_files(config: dict | None = None, key: str = "source_split_files") -> dict[str, str]:
+    if config is None:
+        return SPLIT_FILES
+    configured = config.get("data", {}).get(key)
+    return configured or SPLIT_FILES
+
+
+def load_source_split(source_dir: str | Path, split: str, files: dict[str, str] | None = None) -> dict[str, np.ndarray]:
+    path = Path(source_dir) / (files or SPLIT_FILES)[split]
     with np.load(path) as data:
         return {key: data[key] for key in data.files}
 
@@ -121,8 +128,8 @@ def validate_prepared(prepared: dict[str, dict[str, np.ndarray]]) -> dict:
         "validation_test_no_overlap": not bool(ids["validation"] & ids["test"]),
     }
     for split, arrays in prepared.items():
-        if arrays["X_seq"].ndim != 3 or arrays["X_seq"].shape[1] != 72:
-            raise ValueError(f"{split} must have X_seq [N, 72, F]")
+        if arrays["X_seq"].ndim != 3:
+            raise ValueError(f"{split} must have X_seq [N, T, F]")
         if arrays["X_seq"].shape != arrays["M_seq"].shape:
             raise ValueError(f"{split} X_seq/M_seq shape mismatch")
         if not np.isfinite(arrays["X_seq"]).all() or not np.isfinite(arrays["X_static"]).all():
@@ -141,9 +148,10 @@ def validate_prepared(prepared: dict[str, dict[str, np.ndarray]]) -> dict:
 def write_prepared_dataset(config: dict, prepared: dict, stats: dict, checks: dict) -> None:
     source_dir = Path(config["paths"]["source_dataset_dir"])
     output_dir = Path(config["paths"]["prepared_dataset_dir"])
+    output_files = split_files(config, "output_split_files")
     output_dir.mkdir(parents=True, exist_ok=True)
     for split, arrays in prepared.items():
-        filename = SPLIT_FILES[split]
+        filename = output_files[split]
         np.savez_compressed(output_dir / filename, **arrays)
 
     for filename in ["temporal_feature_columns.json", "static_feature_columns.json"]:
@@ -151,10 +159,11 @@ def write_prepared_dataset(config: dict, prepared: dict, stats: dict, checks: di
         if source.exists():
             (output_dir / filename).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
 
+    landmark_hours = int(config.get("experiment", {}).get("prediction_time_hours", prepared["train"]["X_seq"].shape[1]))
     metadata = {
-        "dataset": "dysurv_faithful_72h",
+        "dataset": f"dysurv_faithful_{landmark_hours}h",
         "source_dataset": str(source_dir),
-        "landmark_hours": 72,
+        "landmark_hours": landmark_hours,
         "input_after_landmark": False,
         "temporal_imputation": ["within_patient_forward_fill", "within_patient_backward_fill", "train_residual_median"],
         "static_preprocessing": "train_mean_standardization",
@@ -169,21 +178,23 @@ def write_prepared_dataset(config: dict, prepared: dict, stats: dict, checks: di
 
 def prepare_dataset(config: dict, force: bool = False) -> dict:
     output_dir = Path(config["paths"]["prepared_dataset_dir"])
-    existing = [output_dir / filename for filename in SPLIT_FILES.values()]
+    source_files = split_files(config, "source_split_files")
+    output_files = split_files(config, "output_split_files")
+    existing = [output_dir / filename for filename in output_files.values()]
     if any(path.exists() for path in existing) and not force:
         raise FileExistsError(f"Faithful dataset already exists in {output_dir}; use --force to replace it")
     source_dir = Path(config["paths"]["source_dataset_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    train_source = load_source_split(source_dir, "train")
+    train_source = load_source_split(source_dir, "train", source_files)
     train_filled = within_patient_fill(restore_missing(train_source["X_seq"], train_source["M_seq"]))
     temporal_medians = fit_residual_medians(train_filled)
     static_mean, static_scale = fit_static_standardizer(train_source["X_static"])
 
     split_summary = {}
     id_sets = {}
-    for split in SPLIT_FILES:
-        source = train_source if split == "train" else load_source_split(source_dir, split)
+    for split in output_files:
+        source = train_source if split == "train" else load_source_split(source_dir, split, source_files)
         within = train_filled if split == "train" else within_patient_fill(restore_missing(source["X_seq"], source["M_seq"]))
         residual_patients = int(np.isnan(within).any(axis=(1, 2)).sum())
         x_seq = fill_residual_missing(within, temporal_medians)
@@ -198,7 +209,7 @@ def prepare_dataset(config: dict, force: bool = False) -> dict:
         }
         if not np.isfinite(arrays["X_seq"]).all() or not np.isfinite(arrays["X_static"]).all():
             raise ValueError(f"{split} contains non-finite model inputs")
-        if arrays["X_seq"].shape != arrays["M_seq"].shape or arrays["X_seq"].shape[1] != 72:
+        if arrays["X_seq"].shape != arrays["M_seq"].shape:
             raise ValueError(f"{split} has invalid temporal shapes")
         if not np.isin(arrays["M_seq"], [0.0, 1.0]).all():
             raise ValueError(f"{split} M_seq must be binary")
@@ -206,7 +217,7 @@ def prepare_dataset(config: dict, force: bool = False) -> dict:
             raise ValueError(f"{split} event_eval must be binary")
         if not ((arrays["duration_eval_days"] >= 0) & (arrays["duration_eval_days"] <= 10)).all():
             raise ValueError(f"{split} duration_eval_days outside [0, 10]")
-        np.savez_compressed(output_dir / SPLIT_FILES[split], **arrays)
+        np.savez_compressed(output_dir / output_files[split], **arrays)
         id_sets[split] = set(map(str, arrays["patient_ids"]))
         split_summary[split] = {
             "n_patients": int(x_seq.shape[0]),
@@ -238,10 +249,11 @@ def prepare_dataset(config: dict, force: bool = False) -> dict:
         source = source_dir / filename
         if source.exists():
             (output_dir / filename).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    landmark_hours = int(config.get("experiment", {}).get("prediction_time_hours", train_source["X_seq"].shape[1]))
     metadata = {
-        "dataset": "dysurv_faithful_72h",
+        "dataset": f"dysurv_faithful_{landmark_hours}h",
         "source_dataset": str(source_dir),
-        "landmark_hours": 72,
+        "landmark_hours": landmark_hours,
         "input_after_landmark": False,
         "temporal_imputation": ["within_patient_forward_fill", "within_patient_backward_fill", "train_residual_median"],
         "static_preprocessing": "train_mean_standardization",

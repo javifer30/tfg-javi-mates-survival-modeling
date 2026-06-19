@@ -969,3 +969,236 @@ Related history: not yet consolidated
 - [ ] Review selected curves and collapse diagnostics before final seeds.
 - [ ] Run final seeds 42, 123 and 2026 only after a non-collapsed validation
       selection is accepted.
+
+## DEC-017 — Extended per-epoch DySurv latent and calibration diagnostics
+
+Date: 2026-06-14
+Status: accepted
+Scope: training diagnostics | evaluation
+Owner: technical agent
+
+### Decision
+
+- Keep model architecture, losses and selection behavior unchanged while
+  extending `metrics/epoch_metrics.csv` with per-epoch calibration and latent
+  diagnostics.
+- Record mean, standard deviation, minimum, maximum and range of 10-day risk.
+- Record total KL and mean/minimum/maximum KL per latent dimension, plus one
+  column `kl_dim_XX` for every latent dimension.
+- Define an active latent unit as a dimension satisfying
+  `Var_x(mu_j) > 0.01` across patients and report the active-unit count.
+- Continue recording Ctd, IBS, IBLL/NBLL, reconstruction loss, survival loss
+  and existing collapse diagnostics.
+
+### Reason
+
+- Ctd can remain high when risk differences are numerically tiny, while
+  calibration and individualization deteriorate.
+- Per-dimension KL and active units make posterior contraction visible before
+  relying on a binary collapse flag.
+
+### Consequences
+
+- The new metrics are diagnostic only and do not alter optimization,
+  checkpoint selection or collapse thresholds.
+- Existing output files are not backfilled; the new columns appear in runs
+  produced after this change.
+## DEC-018 — Isolated Dynamic-DeepHit-faithful 72h pipeline
+
+**Date:** 2026-06-15
+
+Dynamic-DeepHit will be evaluated through a new isolated pipeline under
+`outputs/dynamic_deephit_faithful_72h/`, reusing the exact prepared
+train/validation/test arrays and patient order from `dysurv_faithful_72h`.
+The previous dynamic pipeline and its outputs remain unchanged.
+
+The adaptation preserves the reference model's recurrent embedding,
+next-step longitudinal objective, temporal attention, cause-specific PMF NLL
+and pairwise ranking loss. It uses the same clean input convention as faithful
+DySurv: temporal clinical values plus repeated standardized static covariates,
+without observation masks as input channels. The longitudinal auxiliary target
+contains temporal clinical variables only, so repeated static covariates do not
+dominate its MSE. An explicit tail category represents survival beyond day 10.
+
+Tuning is validation-only and selects by validation Antolini Ctd with IBLL as
+tiebreaker, while reporting collapse diagnostics and a non-collapsed
+alternative when needed. Test predictions are permitted only in the final
+three-seed stage using seeds 42, 123 and 2026.
+
+Related files: `configs/dynamic_deephit_faithful_72h.yaml`,
+`src/models/dynamic_72h/dynamic_deephit_faithful.py`,
+`scripts/tune_dynamic_deephit_faithful_72h.py` and EXP-017.
+
+## DEC-019 — Isolated static-only DySurv faithful 72h pipeline
+
+**Date:** 2026-06-15
+
+DySurv static-only will be evaluated through an isolated MLP-VAE pipeline
+under `outputs/dysurv_static_faithful_72h/`. It reads `X_static`, patient IDs
+and unchanged survival targets directly from the exact split files prepared
+for `dysurv_faithful_72h`; it creates no cohort or split and never uses
+`X_seq` or `M_seq` as inputs.
+
+The model preserves the common structure found in the final `DySurv` sections
+of the GBSG, METABRIC, SUPPORT, NWTCO, SAC3 and SAC_ADMIN notebooks:
+`F -> 3F -> 5F -> 3F`, latent dimension 20, static reconstruction and a
+LogisticHazard head. The decoder defaults to no intermediate activation,
+matching the notebook code. Evaluation uses deterministic `mu`, KL is averaged
+per patient, and explicit loss weights with KL warm-up replace the notebooks'
+internally inconsistent loss call and batch-dependent KL scaling.
+
+Tuning is validation-only with collapse-aware selection. Test is evaluated
+only after a full validation selection, using seeds 42, 123 and 2026. See
+EXP-018 and `configs/dysurv_static_faithful_72h.yaml`.
+
+## DEC-021 — Add time since hospital admission as a static covariate
+
+Date: 2026-06-19
+Status: accepted
+Scope: data
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The static 72h pipeline previously included ICU admission hour of day but did
+  not include elapsed time from hospital admission to ICU admission.
+- MIMIC-IV provides both hospital `admittime` and ICU `intime`, so this covariate
+  can be added without regenerating heavy time-series artifacts.
+
+### Decision
+- Create `flat_features_with_time_since_admission.csv` by appending
+  `time_since_admission_hours` to the existing flat features.
+- Point static dataset configs to the enriched flat-feature file and preprocess
+  the new variable as a numeric static feature.
+- Preserve the raw signed value when ICU `intime` is earlier than hospital
+  `admittime`; do not clamp negative values.
+
+### Reason
+- The covariate is available at the 72h landmark and captures pre-ICU hospital
+  time without using outcomes or post-landmark measurements.
+- A separate enrichment script avoids rerunning expensive time-series
+  extraction and preserves the existing flat-feature row order.
+- Preserving signed values keeps the generated file faithful to raw MIMIC-IV
+  timestamps and avoids silently inventing corrected admission times.
+
+### Consequences
+- Static datasets must be rebuilt before training if the new covariate should be
+  included.
+- Previous static outputs are no longer directly comparable unless the older
+  flat-feature config is restored.
+- Some rows can contain negative values because of timestamp ordering in the
+  raw tables; these should be inspected but are not treated as missing data.
+
+### Related files
+- scripts/add_time_since_admission_to_flat_features.py
+- configs/static_72h_data.yaml
+- configs/static_data.yaml
+- docs/REPRODUCIBILITY.md
+
+### Follow-up
+- [ ] Rebuild static datasets before rerunning static model tuning with the new
+      covariate.
+
+## DEC-022 — CLI-driven parametrizable landmark pipeline
+
+Date: 2026-06-19
+Status: accepted
+Scope: data | training | evaluation | infrastructure
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The project needs to run the current 72h static/dynamic faithful design at
+  24h, 48h and 72h without duplicating three independent pipelines.
+- The recent static covariate addition in DEC-021 must remain the active data
+  definition.
+
+### Decision
+- Add a CLI-driven landmark layer with `--landmark-hours {24,48,72}`.
+- Keep existing 72h scripts/configs available and compatible.
+- Resolve landmark-specific data under `data/processed/landmark_<s>h/` and
+  outputs under `outputs/landmark_<s>h/`.
+- Derive DySurv faithful, Dynamic-DeepHit faithful and static-only DySurv
+  faithful inputs from one common prepared faithful dataset per landmark.
+- Store resolved configs as `config_used.yaml` at the landmark/family output
+  root and at per-candidate run level where tuning creates runs.
+
+### Reason
+- The CLI is the operational source of truth for the landmark while preserving
+  existing base configs as reusable defaults.
+- A single dynamic dataset per landmark prevents patient/split/target drift
+  between dynamic models.
+- Keeping 72h scripts intact reduces risk and allows equivalence checks before
+  running 24h and 48h.
+
+### Consequences
+- Real 72h equivalence must still be demonstrated by rebuilding the new
+  `landmark_72h` datasets and comparing IDs, targets, columns, feature names and
+  shapes against the current 72h artifacts before launching 24h/48h runs.
+- New landmark results will not be directly comparable with older outputs
+  generated before DEC-021 unless the previous flat-feature config is restored.
+
+### Related files
+- src/utils/landmark.py
+- scripts/build_landmark_static_data.py
+- scripts/build_landmark_dynamic_data.py
+- scripts/filter_landmark_dysurv_features.py
+- scripts/prepare_landmark_faithful_dataset.py
+- scripts/tune_landmark_static_models.py
+- scripts/tune_landmark_dysurv_faithful.py
+- scripts/tune_landmark_dynamic_deephit_faithful.py
+- scripts/tune_landmark_dysurv_static_faithful.py
+- tests/test_landmark_pipeline.py
+
+### Follow-up
+- [ ] Rebuild and compare `landmark_72h` against the existing 72h pipeline
+      before running 24h/48h.
+
+## DEC-023 — Common DySurv loss-weight grid for temporal and static faithful models
+
+Date: 2026-06-19
+Status: accepted
+Scope: training | evaluation
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The faithful temporal DySurv and static-only DySurv tuning configs are being
+  reduced to compact 16-combination grids for reuse at 24h, 48h and 72h.
+- Previous tuning showed that `w_surv=0.70, w_recon=0.20, w_kl=0.10` and
+  `w_surv=0.80, w_recon=0.15, w_kl=0.05` are the most defensible shared
+  settings.
+- Equal-weight DySurv settings produced suspicious or collapsed dynamic
+  candidates and should not be retained in the compact grid.
+
+### Decision
+- Use the same four `loss_weights` settings for temporal DySurv faithful and
+  static DySurv faithful:
+  - `w_surv=0.70`, `w_recon=0.20`, `w_kl=0.10`
+  - `w_surv=0.75`, `w_recon=0.20`, `w_kl=0.05`
+  - `w_surv=0.80`, `w_recon=0.15`, `w_kl=0.05`
+  - `w_surv=0.85`, `w_recon=0.10`, `w_kl=0.05`
+- Keep `kl_warmup_epochs=[50]` in both configs.
+- Keep each grid at exactly 16 combinations.
+
+### Reason
+- A common loss-weight grid makes the static-vs-temporal DySurv comparison
+  cleaner: differences are less likely to come from different loss balances.
+- The selected grid keeps the two empirically strongest shared regions and
+  adds two nearby high-survival, low-KL variants.
+- The grid avoids the equal-weight setting associated with low risk dispersion
+  and suspected collapse in temporal DySurv tuning.
+
+### Consequences
+- Temporal DySurv no longer tests the exploratory reconstruction-heavy weights
+  `0.50/0.30/0.20` and `0.55/0.40/0.05` in the compact landmark grid.
+- Static and temporal DySurv now differ in inputs and architecture, but not in
+  the candidate loss-weight balances.
+
+### Related files
+- configs/dysurv_faithful_72h.yaml
+- configs/dysurv_static_faithful_72h.yaml
+
+### Follow-up
+- [ ] Use the common loss-weight grid when running the 24h/48h landmark tuning
+      experiments.

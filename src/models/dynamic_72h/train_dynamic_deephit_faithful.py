@@ -22,6 +22,7 @@ from src.models.dynamic_72h.dynamic_deephit_faithful import DynamicDeepHitFaithf
 from src.models.dynamic_72h.losses import deephit_ranking_loss, pmf_nll
 from src.models.dynamic_72h.predict import survival_df_from_array
 from src.models.dynamic_72h.train_dysurv_faithful import (
+    _faithful_split_files,
     FaithfulSplit,
     _save_curve_examples,
     load_faithful_split,
@@ -208,9 +209,10 @@ def train_dynamic_deephit_faithful(config: dict, logger) -> dict:
         raise ValueError("Test data cannot be loaded during tuning")
     dataset_dir = config["paths"]["prepared_dataset_dir"]
     sample_size = config.get("sample_size")
-    train = load_faithful_split(dataset_dir, "train", sample_size)
-    validation = load_faithful_split(dataset_dir, "validation", sample_size)
-    test = load_faithful_split(dataset_dir, "test", sample_size) if include_test else None
+    split_files = _faithful_split_files(config)
+    train = load_faithful_split(dataset_dir, "train", sample_size, split_files)
+    validation = load_faithful_split(dataset_dir, "validation", sample_size, split_files)
+    test = load_faithful_split(dataset_dir, "test", sample_size, split_files) if include_test else None
     checks = validate_faithful_splits(train, validation, test)
     checks["longitudinal_target_excludes_static"] = True
     input_mode = config["data"]["input_mode"]
@@ -248,6 +250,7 @@ def train_dynamic_deephit_faithful(config: dict, logger) -> dict:
     for directory in [output_dir / "checkpoints", output_dir / "metrics", output_dir / "audit", output_dir / "predictions"]:
         directory.mkdir(parents=True, exist_ok=True)
     save_yaml(output_dir / "config_snapshot.yaml", config)
+    save_yaml(output_dir / "config_used.yaml", config)
     save_json(output_dir / "audit" / "data_and_leakage_checks.json", checks)
 
     history = []

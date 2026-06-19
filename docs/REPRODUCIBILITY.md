@@ -39,7 +39,20 @@ pip install -r requirements.txt
 The static pipeline expects the direct MIMIC-IV extraction artifacts:
 
 - `data/processed/mimic_extraction/flat_features.csv`
+- `data/processed/mimic_extraction/flat_features_with_time_since_admission.csv`
 - `data/processed/mimic_extraction/labels.csv`
+
+Create the enriched flat features file without regenerating time series:
+
+```bash
+python scripts/add_time_since_admission_to_flat_features.py
+```
+
+This reads the existing `flat_features.csv`, joins `icu/icustays.csv.gz` with
+`hosp/admissions.csv.gz`, and appends
+`time_since_admission_hours = ICU intime - hospital admittime` while preserving
+the original flat-feature row order. Negative values are preserved when raw ICU
+`intime` precedes hospital `admittime`.
 
 The canonical static data configuration is:
 
@@ -264,6 +277,65 @@ The main 72-hour metrics are Antolini Ctd, IBS and IBLL/NBLL from pycox
 `EvalSurv`, plus the project extension C-index by horizon for days 1 through
 10.
 
+## Parametrizable Landmark Pipeline
+
+The parametrizable layer reuses the current 72h base configs, including the
+DEC-021 enriched flat-feature source with `time_since_admission_hours`. The CLI
+flag `--landmark-hours` is the operational source of truth and accepts only
+`24`, `48` or `72`.
+
+Build static data for a landmark:
+
+```bash
+python scripts/build_landmark_static_data.py --config configs/static_72h_data.yaml --landmark-hours 72 --force
+```
+
+Build the common dynamic base dataset:
+
+```bash
+python scripts/build_landmark_dynamic_data.py --config configs/dynamic_72h_data.yaml --landmark-hours 72 --force
+```
+
+Derive the DySurv-compatible temporal subset and prepare the common faithful
+dataset:
+
+```bash
+python scripts/filter_landmark_dysurv_features.py --landmark-hours 72 --force
+python scripts/prepare_landmark_faithful_dataset.py --config configs/dysurv_faithful_72h.yaml --landmark-hours 72 --force
+```
+
+Run validation-only dry-runs:
+
+```bash
+python scripts/tune_landmark_static_models.py --config configs/static_72h_tuning.yaml --landmark-hours 72 --models kaplan_meier --dry-run --max-runs 1
+python scripts/tune_landmark_dysurv_faithful.py --config configs/dysurv_faithful_72h.yaml --landmark-hours 72 --dry-run --max-runs 1 --device cpu
+python scripts/tune_landmark_dynamic_deephit_faithful.py --config configs/dynamic_deephit_faithful_72h.yaml --landmark-hours 72 --dry-run --max-runs 1 --device cpu
+python scripts/tune_landmark_dysurv_static_faithful.py --config configs/dysurv_static_faithful_72h.yaml --landmark-hours 72 --dry-run --max-runs 1 --device cpu
+```
+
+Final-seed wrappers are available after validation selection:
+
+```bash
+python scripts/run_final_landmark_static_seeds.py --config configs/static_72h_tuning.yaml --landmark-hours 72 --dry-run
+python scripts/run_final_landmark_dysurv_faithful_seeds.py --config configs/dysurv_faithful_72h.yaml --landmark-hours 72 --dry-run
+python scripts/run_final_landmark_dynamic_deephit_faithful_seeds.py --config configs/dynamic_deephit_faithful_72h.yaml --landmark-hours 72 --dry-run
+python scripts/run_final_landmark_dysurv_static_faithful_seeds.py --config configs/dysurv_static_faithful_72h.yaml --landmark-hours 72 --dry-run
+```
+
+Resolved configs are written to:
+
+- `outputs/landmark_<s>h/static/config_used.yaml`
+- `outputs/landmark_<s>h/dysurv_faithful/config_used.yaml`
+- `outputs/landmark_<s>h/dynamic_deephit_faithful/config_used.yaml`
+- `outputs/landmark_<s>h/dysurv_static_faithful/config_used.yaml`
+
+Before running 24h and 48h experiments, rebuild `landmark_72h` and compare it
+against the current 72h artifacts for split IDs, targets, static columns,
+dynamic shapes, temporal feature names and absence of offsets at or beyond the
+landmark. New landmark results use `time_since_admission_hours` and are not
+directly comparable with older outputs created before DEC-021 unless the old
+flat-feature config is restored.
+
 Audit outputs for the 72-hour pycox static pipeline are written to:
 
 - `outputs/static_72h/audit/deephit_single_time_grid_audit.json`
@@ -452,6 +524,31 @@ python scripts/plot_dynamic_72h_survival_curves.py --outputs-dir outputs/dynamic
 The `--exclude model:seed` option is useful for documented degenerate runs, for
 example the DySurv seed `123` latent-collapse diagnostic.
 
+Resume DySurv-faithful tuning after extending its hyperparameter grid:
+
+```bash
+python scripts/tune_dysurv_faithful_72h.py --config configs/dysurv_faithful_72h.yaml --device cuda --resume
+```
+
+`--resume` identifies completed candidates by their normalized hyperparameters,
+not by positional config ID. It skips completed combinations, assigns new IDs
+after the current maximum, appends new rows to `tuning_results.csv` and
+recomputes `best_hyperparameters.json` over old and new results. Do not combine
+`--resume` with `--force`.
+
+Each new DySurv-faithful run reports per epoch in `metrics/epoch_metrics.csv`:
+
+- validation Ctd, IBS, IBLL/NBLL and horizon C-index;
+- train/validation total, survival, reconstruction and KL losses;
+- `mean_risk10`, `std_risk10`, `min_risk10`, `max_risk10` and
+  `range_risk10`;
+- `std_mu`, `active_units`, KL-per-dimension summaries and `kl_dim_XX` columns.
+
+`active_units` counts latent dimensions with between-patient
+`Var(mu_j) > 0.01`, configured by
+`collapse.active_unit_variance_threshold`. It is diagnostic and is not itself
+a checkpoint exclusion rule.
+
 Dynamic tuning outputs:
 
 - `outputs/dynamic_72h/tuning/{model}/tuning_results.csv`
@@ -629,3 +726,76 @@ Metrics JSON files distinguish:
 - The root `README.md` may lag behind the final static pipeline. Treat this file
   and `configs/static_pipeline.yaml` as the reproducibility authority until the
   root README is refreshed.
+## Dynamic-DeepHit Faithful 72h
+
+This isolated pipeline reuses the already prepared dataset in
+`data/processed/dysurv_faithful_72h/`; no additional dataset generation is
+required. Its config is `configs/dynamic_deephit_faithful_72h.yaml` and its
+outputs are kept under `outputs/dynamic_deephit_faithful_72h/`.
+
+Inspect the 16 planned validation candidates without training:
+
+```bash
+python scripts/tune_dynamic_deephit_faithful_72h.py --config configs/dynamic_deephit_faithful_72h.yaml --dry-run
+```
+
+Run or resume validation-only tuning:
+
+```bash
+python scripts/tune_dynamic_deephit_faithful_72h.py --config configs/dynamic_deephit_faithful_72h.yaml --resume
+```
+
+Audit outputs and optionally run the 64-patient tiny-overfit diagnostic:
+
+```bash
+python scripts/audit_dynamic_deephit_faithful_72h.py --config configs/dynamic_deephit_faithful_72h.yaml
+python scripts/audit_dynamic_deephit_faithful_72h.py --config configs/dynamic_deephit_faithful_72h.yaml --run-tiny-overfit
+```
+
+After reviewing and accepting the validation selection, run exactly the final
+seeds 42, 123 and 2026:
+
+```bash
+python scripts/run_final_dynamic_deephit_faithful_72h_seeds.py --config configs/dynamic_deephit_faithful_72h.yaml
+```
+
+Tuning never evaluates test. Final-seed execution refuses incomplete or
+collapsed selections unless explicitly overridden. No new dependency is
+required beyond the existing project environment.
+
+## DySurv Static Faithful 72h
+
+This static-only pipeline reuses `X_static`, ordered patient IDs and unchanged
+targets from `data/processed/dysurv_faithful_72h/`. No data preparation or new
+split generation is required. The config is
+`configs/dysurv_static_faithful_72h.yaml`; outputs are isolated under
+`outputs/dysurv_static_faithful_72h/`.
+
+Inspect the 16 validation candidates:
+
+```bash
+python scripts/tune_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --dry-run
+```
+
+Run or resume validation-only tuning:
+
+```bash
+python scripts/tune_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --resume
+```
+
+Generate the audit report or rerun the 64-patient tiny-overfit diagnostic:
+
+```bash
+python scripts/audit_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml
+python scripts/audit_dysurv_static_faithful_72h.py --config configs/dysurv_static_faithful_72h.yaml --run-tiny-overfit
+```
+
+After accepting the full validation selection, run exactly seeds 42, 123 and
+2026:
+
+```bash
+python scripts/run_final_dysurv_static_faithful_72h_seeds.py --config configs/dysurv_static_faithful_72h.yaml
+```
+
+Tuning does not load test. The final script rejects partial, smoke-only or
+all-collapsed selections by default. No additional dependency is required.

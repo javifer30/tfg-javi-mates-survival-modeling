@@ -35,7 +35,8 @@ MODEL_ALIASES = {
 
 
 def _load_split(paths, split_name):
-    path = Path(paths["processed_dir"]) / f"{split_name}_static_72h.parquet"
+    suffix = paths.get("static_file_suffix", paths.get("file_suffix", "static_72h"))
+    path = Path(paths["processed_dir"]) / f"{split_name}_{suffix}.parquet"
     return pd.read_parquet(path)
 
 

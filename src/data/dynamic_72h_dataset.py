@@ -1,9 +1,10 @@
 """
-Build dynamic_72h tensors from the static_72h cohort and MIMIC extraction tables.
+Build landmark dynamic tensors from the static landmark cohort and MIMIC tables.
 
-The split, cohort and targets are inherited from static_72h_pycox. Temporal
-features use only measurements with 0 <= offset < 72h and train-only feature
-selection, imputation and scaling.
+The split, cohort and targets are inherited from the corresponding static
+landmark dataset. Temporal features use only measurements with
+0 <= offset < landmark_hours and train-only feature selection, imputation and
+scaling.
 """
 
 from dataclasses import dataclass
@@ -122,7 +123,7 @@ def _read_temporal_source(path, source, column_cfg, id_set, max_offset, chunksiz
     stats = {
         "source": source,
         "rows_seen": rows_seen,
-        "rows_kept_after_id_and_72h_filter": rows_kept,
+        "rows_kept_after_id_and_landmark_filter": rows_kept,
         "min_used_offset_minutes": min_offset,
         "max_used_offset_minutes": max_used_offset,
         "max_excluded_offset_minutes": max_excluded_offset,
@@ -327,8 +328,10 @@ def _patient_any_measurement(mask_by_split):
 
 
 def _summary(splits, arrays_by_split, features, static_features, temporal_stats, mask_by_split, raw_by_split):
+    hours = int(next(iter(arrays_by_split.values()))["X_seq"].shape[1]) if arrays_by_split else 0
     result = {
-        "dataset": "dynamic_72h",
+        "dataset": f"dynamic_{hours}h" if hours else "dynamic_landmark",
+        "landmark_hours": hours,
         "n_temporal_features": len(features),
         "n_static_features": len(static_features),
         "temporal_features": features,
@@ -360,8 +363,10 @@ def write_outputs(config, arrays_by_split, raw_by_split, mask_by_split, features
     audit_dir = Path(config["paths"]["audit_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     audit_dir.mkdir(parents=True, exist_ok=True)
+    suffix = config.get("output_file_suffix", "dynamic_72h")
     for split_name, arrays in arrays_by_split.items():
-        file_name = "val_dynamic_72h.npz" if split_name == "validation" else f"{split_name}_dynamic_72h.npz"
+        file_split = "val" if split_name == "validation" else split_name
+        file_name = f"{file_split}_{suffix}.npz"
         np.savez_compressed(output_dir / file_name, **arrays)
 
     (output_dir / "temporal_feature_columns.json").write_text(
@@ -385,13 +390,14 @@ def write_outputs(config, arrays_by_split, raw_by_split, mask_by_split, features
     (output_dir / "preprocessing_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     Path(config["paths"]["preprocessor_path"]).parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(preprocessor, config["paths"]["preprocessor_path"])
-    (output_dir / "dynamic_72h_dataset_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    summary_name = f"{suffix}_dataset_summary.json"
+    (output_dir / summary_name).write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     _missingness_by_feature(raw_by_split, features).to_csv(audit_dir / "missingness_summary.csv", index=False)
     _hourly_missingness(raw_by_split).to_csv(audit_dir / "hourly_missingness_summary.csv", index=False)
     coverage_df.to_csv(audit_dir / "feature_coverage_by_split.csv", index=False)
     coverage_df.to_csv(audit_dir / "temporal_coverage_summary.csv", index=False)
-    (audit_dir / "dynamic_72h_data_audit.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (audit_dir / f"{suffix}_data_audit.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 
 def _sample_splits(splits, sample_size):
@@ -405,8 +411,9 @@ def _sample_splits(splits, sample_size):
 
 def build_dynamic_72h_dataset(config, logger, force=False, dry_run=False, sample_size=None):
     output_dir = Path(config["paths"]["output_dir"])
-    if output_dir.exists() and any(output_dir.glob("*_dynamic_72h.npz")) and not force and not dry_run:
-        raise FileExistsError(f"Dynamic 72h outputs already exist in {output_dir}. Use --force to overwrite.")
+    suffix = config.get("output_file_suffix", "dynamic_72h")
+    if output_dir.exists() and any(output_dir.glob(f"*_{suffix}.npz")) and not force and not dry_run:
+        raise FileExistsError(f"Dynamic landmark outputs already exist in {output_dir}. Use --force to overwrite.")
 
     splits = load_static_72h_splits(config)
     validate_static_reference(splits)
@@ -418,7 +425,7 @@ def build_dynamic_72h_dataset(config, logger, force=False, dry_run=False, sample
     if not temporal.empty and not temporal["hour"].between(0, int(config["temporal"]["hours"]) - 1).all():
         raise ValueError("Temporal rows outside hour grid after filtering")
     if not temporal.empty and (temporal["offset_minutes"] >= int(config["temporal"]["max_offset_minutes_exclusive"])).any():
-        raise ValueError("Found temporal rows with offset_minutes >= 4320")
+        raise ValueError("Found temporal rows with offset_minutes >= landmark max offset")
 
     min_cov = float(config["temporal"]["temporal_feature_min_patient_coverage"])
     features, train_coverage = select_temporal_features(temporal, split_ids["train"], min_cov)
@@ -465,17 +472,19 @@ def build_dynamic_72h_dataset(config, logger, force=False, dry_run=False, sample
     static_features = static_feature_columns(splits["train"])
     summary = _summary(splits, arrays_by_split, features, static_features, temporal_stats, mask_by_split, raw_by_split)
     summary["checks"] = {
+        "ids_match_static_landmark_exact_order": True,
         "ids_match_static_72h_exact_order": True,
         "no_overlap_between_splits": True,
         "all_duration_rel_days_positive": True,
-        "no_offset_minutes_ge_4320_used": True,
+        "no_offset_minutes_ge_landmark_used": True,
+        "no_offset_minutes_ge_4320_used": int(config["temporal"]["max_offset_minutes_exclusive"]) == 4320,
         "feature_selection_split": "train",
         "imputation_fit_split": "train",
         "scaling_fit_split": "train",
         "delta_seq_implemented": False,
     }
 
-    logger.info("dynamic_72h selected %d temporal features and %d static features", len(features), len(static_features))
+    logger.info("dynamic landmark selected %d temporal features and %d static features", len(features), len(static_features))
     for split_name, arrays in arrays_by_split.items():
         logger.info(
             "%s shapes: X_seq=%s M_seq=%s X_static=%s event_rate=%.4f",
