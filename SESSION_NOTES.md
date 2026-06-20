@@ -3048,3 +3048,97 @@ time-series generation.
 - Did not update `docs/EXPERIMENT_LOG.md` because no experiment was run.
 - Did not update `docs/TODO.md` or `docs/REPRODUCIBILITY.md` because no new
   priority or execution command was introduced.
+
+## 2026-06-19 - Dynamic-DeepHit compact loss grid refinement
+
+### Scope
+
+- Updated `configs/dynamic_deephit_faithful_72h.yaml` to use only the two
+  Dynamic-DeepHit loss-weight settings most supported by the completed 72h
+  tuning results.
+
+### Changes
+
+- Changed `weight_decay` from `[0.0001]` to `[0.0, 0.0001]`.
+- Reduced `loss_weights` from four settings to:
+  `alpha_ranking=0.10, beta_nll=0.50` and
+  `alpha_ranking=0.20, beta_nll=0.60`.
+- Kept `sigma=[0.2]`.
+
+### Validation
+
+- Parsed `configs/dynamic_deephit_faithful_72h.yaml` with PyYAML in
+  `tfg-survival`.
+- Confirmed total combinations remain 16:
+  `2 learning rates x 2 weight-decay values x 2 dropouts x 2 loss settings`.
+
+### Documentation Updates
+
+- Added DEC-024 to `docs/DECISIONS.md`.
+- Did not update `docs/EXPERIMENT_LOG.md` because no experiment was run.
+- Did not update `docs/TODO.md` or `docs/REPRODUCIBILITY.md` because no new
+  priority or execution command was introduced.
+## 2026-06-20 - Landmark 24h/48h output audit after full command batch
+
+### Scope
+
+- Inspected generated artifacts under `data/processed/landmark_24h`,
+  `data/processed/landmark_48h`, `outputs/landmark_24h` and
+  `outputs/landmark_48h` after the user launched the 24h/48h build, tuning and
+  final-seed command batch.
+- Did not modify model code, configs or experiment outputs.
+
+### Findings
+
+- Landmark static, dynamic, DySurv-feature-filtered and faithful datasets were
+  generated for both 24h and 48h.
+- General static-model tuning failed at the first Kaplan-Meier candidate for
+  both landmarks. A temporary debug rerun of Kaplan-Meier showed the cause:
+  `static_file_suffix` was resolved as if it were a filesystem path, producing
+  invalid parquet names like `train_C:\...\static_24h.parquet`.
+- Temporal DySurv faithful and Dynamic-DeepHit faithful tuning failed for all
+  candidates at both landmarks because `validate_faithful_splits` in
+  `src/models/dynamic_72h/train_dysurv_faithful.py` still requires exactly 72
+  hourly steps.
+- Static-only DySurv faithful completed tuning and final seeds at both
+  landmarks, with non-collapsed selected candidates and test metrics written to
+  `final_seed_results.csv`.
+
+### Documentation Updates
+
+- Appended this session note only. No methodological decision or reproducibility
+  command changed during this audit.
+
+## 2026-06-20 - Landmark wrapper bug fixes for static suffix and faithful sequence length
+
+### Scope
+
+- Applied two minimal corrections after auditing failed 24h/48h landmark runs.
+- Did not change model architectures, losses, censoring logic, metrics or
+  hyperparameter grids.
+
+### Changes
+
+- Updated `scripts/tune_static_72h_models.py` so `static_file_suffix` and
+  `file_suffix` are not resolved as filesystem paths. They remain textual
+  suffixes such as `static_24h`, `static_48h` and `static_72h`.
+- Updated `src/models/dynamic_72h/train_dysurv_faithful.py` so faithful split
+  validation no longer requires exactly 72 hourly steps. It now requires
+  train/validation/test to share the same temporal length and records the
+  observed input hours in the leakage checks.
+
+### Validation
+
+- Ran `python -m py_compile scripts/tune_static_72h_models.py
+  src/models/dynamic_72h/train_dysurv_faithful.py` with `tfg-survival`: passed.
+- Ran a temporary Kaplan-Meier 24h debug fit using the corrected path resolver:
+  completed and returned validation Ctd `0.0`, confirming the static parquet
+  path is no longer malformed.
+- Loaded small 24h and 48h faithful train/validation/test samples and ran
+  `validate_faithful_splits`: returned `24/24/24` and `48/48/48` input hours.
+- Ran `python -m pytest tests/test_landmark_pipeline.py -q`: `4 passed`.
+
+### Documentation Updates
+
+- Appended this session note only. No experiment log entry was added because
+  only smoke/debug validation was run, not a full model experiment.

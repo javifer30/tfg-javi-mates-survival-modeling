@@ -1202,3 +1202,37 @@ Related history: not yet consolidated
 ### Follow-up
 - [ ] Use the common loss-weight grid when running the 24h/48h landmark tuning
       experiments.
+
+## DEC-024 — Compact Dynamic-DeepHit loss grid with weight-decay exploration
+
+Date: 2026-06-19
+Status: accepted
+Scope: training
+Owner: technical agent
+Related history: not yet consolidated
+
+### Context
+- The faithful Dynamic-DeepHit tuning grid must remain compact at 16
+  combinations for reuse across landmark experiments.
+- The completed 72h tuning showed two strongest loss-weight settings:
+  `alpha_ranking=0.10, beta_nll=0.50` and
+  `alpha_ranking=0.20, beta_nll=0.60`.
+- The additional intermediate loss settings were reasonable explorations, but
+  less directly justified by observed best configurations.
+
+### Decision
+- Keep only the two empirically best Dynamic-DeepHit loss-weight settings:
+  - `alpha_ranking=0.10`, `beta_nll=0.50`
+  - `alpha_ranking=0.20`, `beta_nll=0.60`
+- Add `weight_decay=[0.0, 0.0001]` to preserve a 16-combination grid.
+- Keep `sigma=[0.2]`.
+
+### Reason
+- This prioritizes the loss settings most supported by observed validation
+  performance.
+- The freed grid capacity is better used to test mild regularization, which may
+  affect calibration and generalization without changing model architecture or
+  loss definition.
+
+### Related files
+- configs/dynamic_deephit_faithful_72h.yaml

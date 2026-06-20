@@ -121,19 +121,24 @@ def validate_faithful_splits(train: FaithfulSplit, validation: FaithfulSplit, te
     train_ids = set(map(str, train.patient_ids))
     val_ids = set(map(str, validation.patient_ids))
     test_ids = set(map(str, test.patient_ids)) if test is not None else set()
+    train_hours = int(train.x_seq.shape[1])
+    validation_hours = int(validation.x_seq.shape[1])
+    test_hours = int(test.x_seq.shape[1]) if test is not None else None
     checks = {
         "train_validation_no_overlap": not bool(train_ids & val_ids),
         "train_test_no_overlap": not bool(train_ids & test_ids),
         "validation_test_no_overlap": not bool(val_ids & test_ids),
         "test_loaded": test is not None,
-        "input_hours": int(train.x_seq.shape[1]),
+        "input_hours": train_hours,
+        "validation_input_hours": validation_hours,
+        "test_input_hours": test_hours,
         "target_not_in_input": True,
         "mask_not_in_input": True,
     }
-    if train.x_seq.shape[1] != 72 or validation.x_seq.shape[1] != 72:
-        raise ValueError("Faithful inputs must contain exactly the first 72 hourly steps")
-    if test is not None and test.x_seq.shape[1] != 72:
-        raise ValueError("Faithful test input must contain exactly 72 hourly steps")
+    if train_hours != validation_hours:
+        raise ValueError(f"Faithful train/validation input hours differ: {train_hours} vs {validation_hours}")
+    if test is not None and test_hours != train_hours:
+        raise ValueError(f"Faithful train/test input hours differ: {train_hours} vs {test_hours}")
     if not checks["train_validation_no_overlap"] or not checks["train_test_no_overlap"] or not checks["validation_test_no_overlap"]:
         raise ValueError(f"Split overlap detected: {checks}")
     return checks

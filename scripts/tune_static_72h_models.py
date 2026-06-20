@@ -33,8 +33,9 @@ def expand_grid(grid):
 
 
 def _resolve_config_paths(config):
+    non_path_keys = {"static_file_suffix", "file_suffix"}
     for key, value in config.get("paths", {}).items():
-        if isinstance(value, str):
+        if key not in non_path_keys and isinstance(value, str):
             config["paths"][key] = str(resolve_path(value))
     return config
 
