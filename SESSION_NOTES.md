@@ -3142,3 +3142,102 @@ time-series generation.
 
 - Appended this session note only. No experiment log entry was added because
   only smoke/debug validation was run, not a full model experiment.
+
+## 2026-06-22 - Landmark 24h/48h uploaded output inspection
+
+### Scope
+
+- Inspected newly added `data/processed/landmark_24h`,
+  `data/processed/landmark_48h`, `outputs/landmark_24h` and
+  `outputs/landmark_48h` artifacts.
+- No code, config, data or output artifacts were modified.
+
+### Findings
+
+- Both landmark datasets are present with static, dynamic, filtered dynamic and
+  faithful prepared inputs.
+- `landmark_24h` static tuning is incomplete: Kaplan-Meier and CoxPH completed,
+  but DeepSurv only created `deepsurv_cfg_001` partial training artifacts and no
+  `tuning_results.csv`; downstream static models were not reached.
+- `landmark_48h` static tuning is complete for Kaplan-Meier, CoxPH, DeepSurv,
+  LogisticHazard, PCHazard and DeepHitSingle.
+- Faithful model tuning is complete for both landmarks:
+  DySurv temporal, Dynamic-DeepHit faithful and DySurv static faithful each have
+  16 completed validation candidates and selected hyperparameters.
+- No final-seed result files were found for 24h or 48h in the inspected output
+  roots; current uploaded artifacts should be treated as validation/tuning
+  results only.
+
+### Documentation Updates
+
+- Appended this session note only. No experiment log entry was added because the
+  task was an artifact inspection rather than a new experiment run.
+## 2026-06-22 - Technical Agent methodology reconstruction report
+
+- Task: reconstructed the implemented MIMIC-IV landmark methodology for the thesis methodology/design section, without modifying model code or running training.
+- Scope inspected: cohort extraction, static/dynamic landmark dataset builders, landmark wrappers, current tuning configs, evaluation metrics, and faithful DySurv/Dynamic-DeepHit model implementations.
+- Light checks only: inspected configs and metadata artifacts for 24h/48h/72h feature counts, split sizes, and output structure; no experiments or retraining were run.
+- Key caveats documented for the report: 24h/48h use `flat_features_with_time_since_admission.csv`; existing 72h processed metadata appears older unless rebuilt; split uniqueness is enforced by ICU stay ID, while subject-level uniqueness is not enforced in the inspected split code; event timing uses the implemented `actualiculos`/hospital mortality proxy.
+
+## 2026-06-23 - Landmark 48h/72h final results analysis
+
+### Scope
+
+- Inspected completed final outputs under `outputs/landmark_48h` and
+  `outputs/landmark_72h`.
+- Reviewed static model tuning/final outputs, faithful Dynamic-DeepHit,
+  temporal DySurv and static DySurv tuning/final outputs, dataset audits,
+  selected hyperparameters, per-seed test metrics and horizon C-index metrics.
+- No training, tuning reruns, code changes, config changes or output rewrites
+  were performed.
+
+### Main Findings
+
+- 48h has a larger eligible cohort than 72h (`27802/9267/9268` vs
+  `18706/6236/6236` train/validation/test) and lower observed event rate
+  (`~0.120` vs `~0.137`).
+- Dynamic-DeepHit faithful is the best overall model at both landmarks:
+  test Ctd `0.816153 +/- 0.000765` at 48h and
+  `0.788668 +/- 0.002194` at 72h, with the best IBS/IBLL among dynamic models.
+- Temporal DySurv faithful is close to Dynamic-DeepHit in discrimination but
+  remains worse in probabilistic calibration, especially at 72h.
+- Static-only DySurv faithful improves over most classical/static baselines at
+  48h but is close to the static neural baselines at 72h.
+- Among static pycox/lifelines models, DeepSurv, LogisticHazard and
+  DeepHitSingle are close; PCHazard has weaker Antolini Ctd but competitive
+  horizon C-index and probabilistic metrics.
+
+### Documentation Updates
+
+- Appended this session note only. No experiment was run, no new technical
+  decision was made, and no reproducibility command changed.
+## 2026-06-23 - Project Manager repository cleanup strategy for landmark-only GitHub review
+
+### Scope
+
+- Reviewed governance instructions, project documentation, root README, `.gitignore`
+  and the visible repository tree outside excluded heavy artifact folders.
+- User clarified that the GitHub-facing repository should focus on the current
+  parametrizable landmark structure; old static/pre-landmark code and historical
+  experiment scaffolding are lower priority than a clean tutor review.
+
+### Findings
+
+- The root `README.md` is stale and still references old commands such as
+  `configs/train.yaml`, `scripts/train_static_pipeline.py`,
+  `scripts/evaluate.py` and `scripts/run_mimic_pipeline.py`.
+- The current active methodology is the landmark layer built around
+  `--landmark-hours {24,48,72}`, with `static_72h_*` configs/scripts still used
+  as compatibility/base implementation for the landmark wrappers.
+- Several pre-landmark static scripts/configs/models remain in the tree and can
+  be archived or removed from the GitHub-facing main branch after dependency
+  checks.
+- Some 72h-named files are not truly obsolete because current landmark wrappers
+  import them; they should be renamed/refactored before archival rather than
+  moved immediately.
+
+### Outcome
+
+- Produced a cleanup strategy focused on keeping only the current landmark
+  project structure visible in GitHub.
+- No code, configs, tests, data, outputs or model artifacts were modified.
