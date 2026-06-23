@@ -1,41 +1,35 @@
-# TFG Survival Modeling
+# Landmark Survival Modeling TFG
 
-Repositorio final del TFG de Matemáticas sobre modelos de supervivencia estáticos y dinámicos en pacientes adultos de UCI usando MIMIC-IV.
+Repositorio del TFG de Matemáticas sobre modelos de supervivencia en pacientes
+adultos de UCI usando MIMIC-IV.
 
-El objetivo del código es mantener un pipeline simple, reproducible y defendible para:
+La versión actual del proyecto se centra en un único pipeline parametrizable por
+landmark:
 
-- construir datos estáticos y temporales;
-- replicar modelos de supervivencia de referencia;
-- adaptar DySurv al experimento con landmarks diarios;
-- comparar modelos con métricas adecuadas de supervivencia.
+```text
+landmark_hours = 24, 48, 72
+```
+
+Para cada landmark se construye una cohorte de pacientes todavía en riesgo, se
+usan solo variables disponibles hasta ese instante y se evalúa supervivencia en
+los 10 días posteriores.
 
 ## Estructura
 
 ```text
-configs/                 Configuración de datos, features y entrenamiento.
-data/                    Datos locales. No se versionan datos MIMIC-IV ni derivados.
-guidelines/TFG/          Instrucciones académicas y de código del TFG.
-notebooks/               Exploración. No son el pipeline principal.
-outputs/                 Modelos, métricas, figuras, predicciones, logs y checkpoints.
-scripts/                 Puntos de entrada ejecutables desde terminal.
-src/
-  data/                  Carga y preprocesamiento de datos.
-  evaluation/            Métricas y comparación de modelos.
-  features/              Construcción de variables.
-  models/                Modelos adaptados al pipeline del TFG.
-  models_references/     Repositorios originales consultados localmente.
-  utils/                 Utilidades compartidas.
-tests/                   Tests mínimos de arquitectura y consistencia.
+configs/      Configs base para datos, tuning y final seeds landmark.
+scripts/      Entrypoints ejecutables desde terminal.
+src/data/     Construcción de datasets landmark estáticos, dinámicos y faithful.
+src/models/   Modelos estáticos pycox/lifelines y modelos dinámicos faithful.
+src/evaluation/ Métricas comunes de supervivencia.
+src/utils/    Configuración, logging, reproducibilidad y resolución landmark.
+tests/        Tests ligeros del pipeline landmark.
+docs/         Historia, decisiones, experimentos y reproducibilidad.
+TFG/          Instrucciones académicas y guía metodológica del TFG.
 ```
 
-## Reglas de trabajo
-
-- No subir datos de MIMIC-IV ni datasets derivados a GitHub.
-- Mantener `src/models_references/` como referencia metodológica local, sin subir repositorios externos a GitHub.
-- Implementar adaptaciones propias en `src/models/` y `src/data/`.
-- Usar rutas relativas al proyecto.
-- Guardar resultados reproducibles en `outputs/`.
-- Ejecutar el pipeline principal desde `scripts/`, no desde notebooks.
+No se versionan datos MIMIC-IV, datasets derivados, modelos entrenados,
+checkpoints ni outputs.
 
 ## Instalación
 
@@ -45,48 +39,180 @@ env\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Uso
+En este proyecto se ha usado el entorno local `tfg-survival` para pruebas y
+validación.
 
-Entrenamiento del baseline estático configurado en `configs/train.yaml`:
+## Datos Esperados
 
-```bash
-python scripts/train_static_pipeline.py
-```
-
-Evaluación de modelos guardados:
-
-```bash
-python scripts/evaluate.py
-```
-
-Preprocesamiento MIMIC-IV basado en scripts de referencia locales:
-
-```bash
-python scripts/run_mimic_pipeline.py
-```
-
-## Configuración
-
-El archivo principal actual es:
+El pipeline landmark parte de artefactos MIMIC-IV procesados localmente:
 
 ```text
-configs/train.yaml
+data/processed/mimic_extraction/flat_features_with_time_since_admission.csv
+data/processed/mimic_extraction/labels.csv
+data/processed/mimic_extraction/timeseries.csv
+data/processed/mimic_extraction/timeserieslab.csv
 ```
 
-Contiene el nombre del experimento, rutas de datos locales, definición de evento/duración, modelos estáticos iniciales y carpetas de salida.
+Si solo existe `flat_features.csv`, generar primero la versión enriquecida:
 
-## Referencias internas
+```bash
+python scripts/add_time_since_admission_to_flat_features.py
+```
 
-Las instrucciones completas del TFG están en:
+## Pipeline Landmark
+
+El argumento `--landmark-hours` es la fuente operativa principal y acepta:
 
 ```text
-guidelines/TFG/
+24, 48, 72
 ```
 
-El documento operativo para Codex y futuras modificaciones de código es:
+### 1. Dataset estático
+
+```bash
+python scripts/build_landmark_static_data.py ^
+  --config configs/landmark_static_data.yaml ^
+  --landmark-hours 72 ^
+  --force
+```
+
+### 2. Dataset dinámico base
+
+```bash
+python scripts/build_landmark_dynamic_data.py ^
+  --config configs/landmark_dynamic_data.yaml ^
+  --landmark-hours 72 ^
+  --force
+```
+
+### 3. Subconjunto temporal DySurv
+
+```bash
+python scripts/filter_landmark_dysurv_features.py ^
+  --landmark-hours 72 ^
+  --force
+```
+
+### 4. Dataset faithful común
+
+```bash
+python scripts/prepare_landmark_faithful_dataset.py ^
+  --config configs/landmark_dysurv_faithful.yaml ^
+  --landmark-hours 72 ^
+  --force
+```
+
+## Modelos
+
+Modelos estáticos:
+
+- Kaplan-Meier descriptivo.
+- CoxPH.
+- DeepSurv-style CoxPH.
+- LogisticHazard.
+- PCHazard.
+- DeepHitSingle.
+
+Modelos dinámicos faithful:
+
+- DySurv faithful temporal.
+- Dynamic-DeepHit faithful.
+- DySurv static-only faithful.
+
+Todos los modelos de un mismo landmark comparten cohortes, splits, targets y
+horizonte de evaluación.
+
+## Tuning
+
+Planificar sin entrenar:
+
+```bash
+python scripts/tune_landmark_static_models.py ^
+  --config configs/landmark_static_tuning.yaml ^
+  --landmark-hours 72 ^
+  --models coxph deepsurv pchazard deephit_single ^
+  --dry-run
+```
+
+Tuning dinámico faithful:
+
+```bash
+python scripts/tune_landmark_dysurv_faithful.py ^
+  --config configs/landmark_dysurv_faithful.yaml ^
+  --landmark-hours 72 ^
+  --device cuda ^
+  --resume
+```
+
+```bash
+python scripts/tune_landmark_dynamic_deephit_faithful.py ^
+  --config configs/landmark_dynamic_deephit_faithful.yaml ^
+  --landmark-hours 72 ^
+  --device cuda ^
+  --resume
+```
+
+```bash
+python scripts/tune_landmark_dysurv_static_faithful.py ^
+  --config configs/landmark_dysurv_static_faithful.yaml ^
+  --landmark-hours 72 ^
+  --device cuda ^
+  --resume
+```
+
+## Final Seeds
+
+Tras seleccionar hiperparámetros por validación:
+
+```bash
+python scripts/run_final_landmark_static_seeds.py ^
+  --config configs/landmark_static_tuning.yaml ^
+  --landmark-hours 72
+```
+
+```bash
+python scripts/run_final_landmark_dynamic_deephit_faithful_seeds.py ^
+  --config configs/landmark_dynamic_deephit_faithful.yaml ^
+  --landmark-hours 72 ^
+  --device cuda
+```
+
+Los seeds finales son:
 
 ```text
-guidelines/TFG/CODEX_TFG_MATES_JAVI.md
+42, 123, 2026
 ```
 
-Los repositorios externos en `src/models_references/` no se versionan. Si se necesita reproducir una adaptación concreta, documentar la fuente original y mantener el wrapper o adaptación propia en `src/models/` o `src/data/`.
+## Outputs
+
+Los resultados se separan por landmark:
+
+```text
+data/processed/landmark_24h/
+data/processed/landmark_48h/
+data/processed/landmark_72h/
+
+outputs/landmark_24h/
+outputs/landmark_48h/
+outputs/landmark_72h/
+```
+
+Cada ejecución guarda una configuración resuelta, por ejemplo:
+
+```text
+outputs/landmark_72h/static/config_used.yaml
+outputs/landmark_72h/dysurv_faithful/config_used.yaml
+outputs/landmark_72h/dynamic_deephit_faithful/config_used.yaml
+outputs/landmark_72h/dysurv_static_faithful/config_used.yaml
+```
+
+## Documentación
+
+- `docs/REPRODUCIBILITY.md`: comandos reproducibles.
+- `docs/DECISIONS.md`: decisiones metodológicas.
+- `docs/EXPERIMENT_LOG.md`: experimentos ejecutados.
+- `docs/PROJECT_HISTORY.md`: historia consolidada.
+- `docs/TODO.md`: tareas pendientes.
+
+La rama `backup/pre-cleanup-landmark` conserva el estado anterior a la limpieza
+del repositorio.

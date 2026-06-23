@@ -1,0 +1,3 @@
+paths:
+  final_dir: outputs/landmark_72h/static/final
+  comparison_path: outputs/landmark_72h/static/final/static_72h_model_comparison.csv

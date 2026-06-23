@@ -1,27 +1,6 @@
-# Data and model artifacts
-/models/
-/checkpoints/
-outputs/models/*
-outputs/checkpoints/*
-outputs/metrics/*
-outputs/predictions/*
-outputs/figures/*
-outputs/logs/*
-outputs/preprocessors/
-outputs/tuning/
-outputs/final_static/
-outputs/diagnostics/
-outputs/static_72h/
-outputs/dynamic_72h/
-!outputs/models/.gitkeep
-!outputs/checkpoints/.gitkeep
-!outputs/metrics/.gitkeep
-!outputs/predictions/.gitkeep
-!outputs/figures/.gitkeep
-!outputs/logs/.gitkeep
-
-# Python
+# Local environments and Python cache
 env/
+.venv/
 __pycache__/
 **/__pycache__/
 *.pyc
@@ -29,78 +8,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Jupyter
-.ipynb_checkpoints/
-**/.ipynb_checkpoints/
-
-# IDE
-.vscode/
-.idea/
-
-# Temporary local files
-basura/
-gemini.md
-mimic_timeseries_sparse_optimization_plan.md
-
-# Exploratory and historical material not needed for the current static
-# pipeline commit. Keep local until explicitly reviewed for reproducibility.
-notebooks/
-reports/
-references/
-
-# Legacy/upstream extraction and old feature-engineering code. These are not
-# imported by scripts/run_static_pipeline.py or its current static dependency
-# closure.
-configs/data_config.yaml
-configs/features.yaml
-configs/train.yaml
-scripts/evaluate.py
-scripts/run_mimic_pipeline.py
-scripts/train_static_pipeline.py
-src/data/data_loader.py
-src/data/mimic_direct_extraction.py
-src/data/mimic_timeseries_sparse.py
-src/features/
-src/models/base.py
-src/models/cox.py
-src/models/deepsurv.py
-src/models/deepsurv_model.py
-src/models/pwe_model.py
-src/models/pwe_poisson.py
-src/models/rsf_model.py
-src/utils/split_train_test.py
-
-# Optional standalone diagnostics. Static training already writes the main
-# time-dependent metric artifacts; keep these out until you choose to use them.
-scripts/evaluate_deephit_time_dependent.py
-scripts/evaluate_pchazard_time_dependent.py
-
-# External reference repositories kept locally for methodology review.
-src/models_references/
-src/preprocessing paper/
-
-# memoria
-Memoria/
-Memoria/**/*.aux
-Memoria/**/*.bbl
-Memoria/**/*.fdb_latexmk
-Memoria/**/*.fls
-Memoria/**/*.gz
-Memoria/**/*.log
-Memoria/**/*.md
-Memoria/**/*.out
-Memoria/**/*.pdf
-Memoria/**/*.toc
-*.pdf
-*.aux
-
-# Data from MIMIC-IV or derived patient-level files must not be versioned.
-# Some files below are required at runtime but must be supplied manually after
-# cloning, especially:
-# - data/processed/mimic_extraction/flat_features.csv
-# - data/processed/mimic_extraction/labels.csv
-# - generated data/processed/static/*.parquet files when run_build_static_data
-#   is false in configs/static_pipeline.yaml
+# MIMIC-IV data and derived patient-level artifacts
 data/raw/*
 data/interim/*
 data/processed/*
@@ -109,31 +17,40 @@ data/processed/*
 !data/processed/.gitkeep
 !data/mimic_extraction_explanation.md
 
-# guidelines for the models
-guidelines/
-
-
-# DySurv faithful generated data and outputs
-/outputs/dysurv_faithful_72h/
-/data/processed/dysurv_faithful_72h/
-
-# DySurv bis with some results
-/outputs/dynamic_72h_bis/
-/outputs/thesis_tables/dynamic_72h_bis/
-
-#Dynamic-DeepHit generated data and outputs
-/outputs/dynamic_deephit_faithful_72h/
-/data/processed/dynamic_deephit_faithful_72h/
-
-# Dysurv static faithful
-/outputs/dysurv_static_faithful_72h/
-
-# Outputs
+# Generated outputs, models and checkpoints
 /outputs/
-
-# Generated training artifacts
-/checkpoints/
 /models/
-/outputs/checkpoints/
-/outputs/models/
-/outputs/predictions/
+/checkpoints/
+
+# Local exploratory or bulky material
+notebooks/
+reports/
+basura/
+guidelines/
+Memoria/
+references/
+
+# Local archives and shortcuts
+*.tar.gz
+*.zip
+*.lnk
+outputs - Shortcut.lnk
+
+# IDE
+.vscode/
+.idea/
+
+# LaTeX/build byproducts
+*.aux
+*.bbl
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.pdf
+
+# External reference repositories kept locally for methodology review
+src/models_references/
+src/preprocessing paper/

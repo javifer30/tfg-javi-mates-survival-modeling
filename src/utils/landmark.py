@@ -73,7 +73,7 @@ def apply_landmark_dynamic_data_config(config: dict, landmark_hours: int) -> dic
     tag = landmark_tag(hours)
     static_file = static_suffix(hours)
     dynamic_file = dynamic_suffix(hours)
-    cfg.setdefault("paths", {})["static_72h_dir"] = f"data/processed/{tag}/static"
+    cfg.setdefault("paths", {})["static_landmark_dir"] = f"data/processed/{tag}/static"
     cfg["paths"]["output_dir"] = f"data/processed/{tag}/dynamic"
     cfg["paths"]["audit_dir"] = f"outputs/{tag}/dynamic/audit"
     cfg["paths"]["preprocessor_path"] = f"data/processed/{tag}/dynamic/preprocessor.joblib"

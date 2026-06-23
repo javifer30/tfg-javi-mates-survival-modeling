@@ -1,0 +1,82 @@
+experiment:
+  name: dynamic_deephit_faithful_72h
+  prediction_time_hours: 72
+  max_horizon_days: 10
+  time_unit: days_since_72h
+  cuts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+paths:
+  prepared_dataset_dir: data/processed/landmark_72h/faithful
+  outputs_dir: outputs/landmark_72h/dynamic_deephit_faithful
+
+data:
+  input_mode: temporal_plus_static_repeated
+  longitudinal_target: temporal_only
+  num_workers: 0
+
+evaluation:
+  horizon_times: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  metric_integration_num_points: 100
+  save_example_curves: true
+  n_example_patients_per_group: 3
+
+model:
+  fixed:
+    typ: LSTM
+    layers_rnn: 1
+    hidden_rnn: 64
+    long_layers: [64]
+    attention_layers: [64]
+    cause_specific_layers: [64]
+    activation: ReLU
+    num_durations: 10
+    include_tail_category: true
+
+tuning:
+  seed: 42
+  include_test: false
+  objective:
+    primary_metric: validation_ctd_antolini
+    primary_direction: maximize
+    tiebreaker_metric: validation_ibll
+    tiebreaker_direction: minimize
+  grid:
+    learning_rate: [0.001, 0.0005]
+    weight_decay: [0.0, 0.0001]
+    dropout: [0.1, 0.3]
+    batch_size: [128]
+    epochs: [150]
+    patience: [15]
+    loss_weights:
+      - alpha_ranking: 0.10
+        beta_nll: 0.50
+      - alpha_ranking: 0.20
+        beta_nll: 0.60
+    sigma: [0.2]
+
+collapse:
+  std_risk10_threshold: 0.005
+  range_risk10_threshold: 0.02
+  min_unique_risk10_rounded_6: 10
+  pmf_sum_tolerance: 0.0001
+  min_mean_tail_probability: 0.000001
+
+checkpoints:
+  save_best: true
+  save_last: true
+
+final:
+  seeds: [42, 123, 2026]
+
+audit:
+  tiny_overfit:
+    sample_size: 64
+    epochs: 100
+    patience: 100
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    dropout: 0.1
+    batch_size: 64
+    alpha_ranking: 0.1
+    beta_nll: 0.8
+    sigma: 0.1

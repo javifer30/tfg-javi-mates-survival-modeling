@@ -1,4 +1,0 @@
-base_config: configs/dynamic_72h_tuning.yaml
-final:
-  seeds: [42, 123, 2026]
-

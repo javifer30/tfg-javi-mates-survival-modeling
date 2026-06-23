@@ -1236,3 +1236,60 @@ Related history: not yet consolidated
 
 ### Related files
 - configs/dynamic_deephit_faithful_72h.yaml
+
+## DEC-025 — GitHub-facing landmark-only repository structure
+
+Date: 2026-06-23
+Status: accepted
+Scope: infrastructure | documentation
+Owner: Project Manager/Historian
+Related history: PROJECT_HISTORY.md section 16
+
+### Context
+- The tutor will review the project code in GitHub.
+- The active methodology is now the parametrizable landmark pipeline controlled
+  by `--landmark-hours {24,48,72}`.
+- The repository still contained pre-landmark static scripts/configs/models and
+  an older non-faithful dynamic layer that were no longer part of the current
+  thesis-facing workflow.
+
+### Decision
+- Preserve the pre-cleanup state in the Git branch
+  `backup/pre-cleanup-landmark`.
+- Make the active GitHub-facing tree focus on the current landmark pipeline:
+  landmark data builders, static pycox/lifelines models, faithful temporal
+  DySurv, faithful Dynamic-DeepHit and static-only DySurv.
+- Remove old pre-landmark entrypoints from the active tree instead of keeping
+  them beside the current workflow.
+- Rename active files toward `landmark_*` names while keeping artifact suffixes
+  such as `static_72h` and `dynamic_72h` where they identify generated outputs
+  for a specific landmark.
+
+### Reason
+- A smaller landmark-only tree is easier for an external reviewer to navigate
+  and better matches the final TFG methodology.
+- The backup branch preserves recoverability without forcing obsolete code into
+  the tutor-facing branch.
+- Keeping output suffixes by landmark avoids breaking compatibility with
+  existing generated artifacts and documented result folders.
+
+### Consequences
+- Historical pre-landmark commands are recoverable from
+  `backup/pre-cleanup-landmark`, not from the cleaned active tree.
+- Root `README.md` and `docs/REPRODUCIBILITY.md` now describe the landmark
+  pipeline as the canonical interface.
+- Future documentation should treat non-landmark code as historical unless it
+  is deliberately restored from the backup branch.
+
+### Related files
+- README.md
+- docs/REPRODUCIBILITY.md
+- docs/TODO.md
+- scripts/
+- configs/
+- src/
+- tests/
+
+### Follow-up
+- [ ] Before publishing or sharing GitHub, manually verify that no local data,
+      outputs, checkpoints or trained model artifacts are tracked.

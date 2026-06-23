@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.filter_dynamic_72h_dysurv_features import (
+from scripts.landmark_dysurv_feature_filter_impl import (
     copy_if_exists,
     filter_split,
     load_features,

@@ -3241,3 +3241,47 @@ time-series generation.
 - Produced a cleanup strategy focused on keeping only the current landmark
   project structure visible in GitHub.
 - No code, configs, tests, data, outputs or model artifacts were modified.
+
+## 2026-06-23 - Landmark-only repository cleanup implementation
+
+### Scope
+
+- Implemented the approved cleanup plan for a tutor-facing GitHub repository.
+- Created the safety commit and branch `backup/pre-cleanup-landmark` before
+  cleanup work.
+- Did not inspect or modify `data/`, `outputs/`, `notebooks/`, `checkpoints/`
+  or `reports/` beyond ignored dry-run config snapshots under `outputs/`.
+
+### What changed
+
+- Removed old pre-landmark static pipeline files and the obsolete non-faithful
+  dynamic layer from the active tree.
+- Renamed active configs, scripts, modules and tests toward `landmark_*`
+  naming.
+- Kept the current landmark wrappers and CLI flags such as `--landmark-hours`,
+  `--resume`, `--dry-run`, `--max-runs` and `--models`.
+- Rewrote root `README.md` and `docs/REPRODUCIBILITY.md` around the current
+  parametrizable landmark workflow.
+- Fixed `.gitignore` so root model artifacts remain ignored while
+  `src/models/` stays visible to Git and tooling.
+
+### Validation
+
+- Ran Python compilation for active scripts, source files and tests.
+- Ran `pytest tests -q`: 35 passed, 4 external SciPy deprecation warnings.
+- Ran dry-runs for the four main tuning entrypoints:
+  static models, DySurv faithful, Dynamic-DeepHit faithful and DySurv
+  static-only faithful.
+
+### Documentation updates
+
+- Added DEC-025 for the GitHub-facing landmark-only structure.
+- Added a new project-history section for the cleanup.
+- Updated `docs/TODO.md` with completed validation and remaining publication
+  checks.
+
+### Next steps
+
+- Manually verify tracked files before pushing to GitHub.
+- If desired, do a cosmetic pass over remaining internal class names containing
+  `72h`, without changing model behavior.

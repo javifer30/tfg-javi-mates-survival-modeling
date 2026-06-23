@@ -1,0 +1,94 @@
+experiment:
+  name: dysurv_faithful_72h
+  prediction_time_hours: 72
+  max_horizon_days: 10
+  time_unit: days_since_72h
+  cuts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+paths:
+  source_dataset_dir: data/processed/landmark_72h/dynamic_dysurv_features
+  prepared_dataset_dir: data/processed/landmark_72h/faithful
+  outputs_dir: outputs/landmark_72h/dysurv_faithful
+
+data:
+  input_mode: temporal_plus_static_repeated
+  reconstruction_target: temporal_only
+  reconstruction_weighting: observed_weighted
+  observed_reconstruction_weight: 2.0
+  imputation: forward_fill_backward_fill_train_median
+  num_workers: 0
+
+evaluation:
+  horizon_times: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  metric_integration_num_points: 100
+  save_example_curves: true
+  n_example_patients_per_group: 3
+
+model:
+  fixed:
+    latent_dim: 20
+    encoder_mlp: [294, 490, 294]
+    survival_mlp: [294, 490, 294]
+    decoder_type: recurrent_faithful
+    rnn_hidden_dim: null
+    num_durations: 10
+
+tuning:
+  seed: 42
+  include_test: false
+  objective:
+    primary_metric: validation_ctd_antolini
+    primary_direction: maximize
+    tiebreaker_metric: validation_ibll
+    tiebreaker_direction: minimize
+  grid:
+    learning_rate: [0.001, 0.0005]
+    weight_decay: [0.0001]
+    dropout: [0.1, 0.3]
+    batch_size: [128]
+    epochs: [150]
+    patience: [15]
+    loss_weights:
+      - w_surv: 0.70
+        w_recon: 0.20
+        w_kl: 0.10
+      - w_surv: 0.75
+        w_recon: 0.20
+        w_kl: 0.05
+      - w_surv: 0.80
+        w_recon: 0.15
+        w_kl: 0.05
+      - w_surv: 0.85
+        w_recon: 0.10
+        w_kl: 0.05
+    kl_warmup_epochs: [50]
+    metrics_every_n_epochs: [1]
+
+collapse:
+  std_risk10_threshold: 0.005
+  range_risk10_threshold: 0.02
+  std_mu_threshold: 0.001
+  active_unit_variance_threshold: 0.01
+  kl_threshold: 0.0001
+  kl_consecutive_epochs: 5
+  min_unique_risk10_rounded_6: 10
+
+checkpoints:
+  save_best: true
+  save_last: true
+
+final:
+  seeds: [42, 123, 2026]
+
+audit:
+  tiny_overfit:
+    sample_size: 64
+    epochs: 100
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    dropout: 0.1
+    batch_size: 64
+    w_surv: 1.0
+    w_recon: 0.0
+    w_kl: 0.0
+    kl_warmup_epochs: 0

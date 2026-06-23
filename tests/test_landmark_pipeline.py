@@ -3,8 +3,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.data.dysurv_faithful_72h_dataset import prepare_arrays, validate_prepared
-from src.data.static_72h_dataset import EVENT_COL, DURATION_COL, REL_DURATION_DAYS_COL, load_static_72h_base_table
+from src.data.landmark_faithful_dataset import prepare_arrays, validate_prepared
+from src.data.landmark_static_dataset import EVENT_COL, DURATION_COL, REL_DURATION_DAYS_COL, load_landmark_static_base_table
 from src.utils.landmark import (
     apply_landmark_dynamic_data_config,
     apply_landmark_faithful_config,
@@ -74,7 +74,7 @@ def test_landmark_static_target_formula_for_24h(tmp_path):
         },
         "target": {"prediction_time_hours": 24, "max_horizon_days": 10},
     }
-    df = load_static_72h_base_table(config, _Logger()).sort_values("patientunitstayid")
+    df = load_landmark_static_base_table(config, _Logger()).sort_values("patientunitstayid")
     assert df["patientunitstayid"].tolist() == [2, 3, 4]
     assert np.allclose(df[REL_DURATION_DAYS_COL].to_numpy(), [1.0, 11.0, 14.0])
     assert np.allclose(df[DURATION_COL].to_numpy(), [1.0, 10.0, 10.0])

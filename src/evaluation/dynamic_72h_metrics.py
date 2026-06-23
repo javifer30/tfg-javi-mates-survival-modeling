@@ -1,4 +1,4 @@
-"""Evaluation helpers for dynamic_72h models."""
+"""Evaluation helpers for dynamic_landmark models."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.evaluation.static_72h_metrics import (
+from src.evaluation.landmark_survival_metrics import (
     eval_surv_metrics,
     horizon_c_index_rows,
     mean_horizon_c_index,

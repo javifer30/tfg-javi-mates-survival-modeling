@@ -624,3 +624,32 @@ Pendiente o parcial:
 - `tests/*.py`;
 - `basura/instrucciones_refactorizacion.txt`;
 - `basura/mimic_timeseries_sparse_optimization_plan.md`.
+
+## 16. Limpieza GitHub-facing alrededor del pipeline landmark
+
+El 23/06/2026 se reorganizo la rama activa para que la vista de GitHub refleje
+la metodologia actual del TFG: un pipeline parametrizable por
+`--landmark-hours {24,48,72}`. Antes de tocar la estructura se guardo el estado
+previo en la rama `backup/pre-cleanup-landmark`.
+
+La limpieza elimina de la rama activa scripts, configs y modulos antiguos de la
+fase pre-landmark y del primer pipeline dinamico no faithful. La interfaz visible
+queda centrada en:
+
+- construccion de datasets landmark estaticos y dinamicos;
+- modelos estaticos pycox/lifelines por landmark;
+- DySurv faithful temporal;
+- Dynamic-DeepHit faithful;
+- DySurv static-only faithful;
+- evaluacion y tuning validation-only con seeds finales `42`, `123` y `2026`.
+
+Tambien se actualizo el `README.md` raiz como guia operativa del proyecto y
+`docs/REPRODUCIBILITY.md` como referencia de comandos. La documentacion deja
+claro que el codigo historico puede recuperarse desde la rama de backup, pero no
+forma parte de la interfaz activa que revisara el tutor.
+
+Validacion de la limpieza:
+
+- compilacion Python de los archivos activos;
+- `pytest tests -q`: 35 tests pasados;
+- dry-runs de los cuatro entrypoints principales de tuning landmark.
