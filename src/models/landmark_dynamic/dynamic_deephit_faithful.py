@@ -1,4 +1,4 @@
-"""Dynamic-DeepHit adaptation for the faithful 72-hour dataset.
+"""Dynamic-DeepHit adaptation for the faithful landmark dataset.
 
 Reference implementations:
 - src/models_references/DynamicDeepHit/ddh/ddh_torch.py
@@ -20,6 +20,8 @@ from src.models.landmark_dynamic.common import create_nn
 
 
 class DynamicDeepHitFaithful72h(nn.Module):
+    """Recurrent Dynamic-DeepHit model with a PMF survival output."""
+
     def __init__(
         self,
         input_dim: int,
@@ -53,6 +55,7 @@ class DynamicDeepHitFaithful72h(nn.Module):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Return longitudinal predictions, attention weights and event PMF."""
         hidden_output = self.embedding(x)
         hidden = hidden_output[0] if isinstance(hidden_output, tuple) else hidden_output
         longitudinal_prediction = self.longitudinal(hidden)

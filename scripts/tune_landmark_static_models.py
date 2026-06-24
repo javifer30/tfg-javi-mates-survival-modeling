@@ -1,3 +1,9 @@
+"""Run validation-only hyperparameter search for static landmark models.
+
+The test split is not used during tuning. Use --dry-run to print the planned
+runs, --models to select a subset, and --resume to skip completed candidates.
+"""
+
 import argparse
 import json
 import sys

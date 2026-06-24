@@ -35,6 +35,13 @@ def _hidden_mlp(
 
 
 class DySurvStaticFaithful72h(nn.Module):
+    """Static-only DySurv baseline for the same faithful landmark splits.
+
+    This model removes the temporal sequence and keeps only the static VAE plus
+    survival head. It is useful for asking whether DySurv gains from longitudinal
+    data or mainly from the static covariates and architecture.
+    """
+
     def __init__(
         self,
         input_dim: int,
@@ -103,6 +110,7 @@ class DySurvStaticFaithful72h(nn.Module):
         }
 
     def predict_logits(self, x_static: torch.Tensor) -> torch.Tensor:
+        """Use deterministic latent means for final survival predictions."""
         mu, _ = self.encode(x_static)
         return self.survival_head(mu)
 

@@ -1,4 +1,9 @@
-"""Helpers for CLI-driven landmark pipeline configuration."""
+"""Helpers for CLI-driven landmark pipeline configuration.
+
+The YAML files keep 72h defaults as examples, but the public scripts should use
+``--landmark-hours``. These helpers rewrite paths, experiment names and file
+suffixes so the same code can run at 24h, 48h or 72h.
+"""
 
 from __future__ import annotations
 

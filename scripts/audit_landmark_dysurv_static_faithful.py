@@ -124,7 +124,7 @@ def write_report(base: dict, identity: dict):
         "",
         "## 1. Executive summary",
         "",
-        "This pipeline compares a static MLP-VAE DySurv against temporal faithful DySurv using the same 72-hour landmark cohort, patient splits, targets, horizon and metrics. Full tuning and final validity remain pending unless results are listed below.",
+        "This pipeline compares a static MLP-VAE DySurv against temporal faithful DySurv using the same selected landmark cohort, patient splits, targets, horizon and metrics. Full tuning and final validity remain pending unless results are listed below.",
         "",
         "## 2. Original static DySurv notebooks",
         "",

@@ -1,4 +1,4 @@
-"""Training and evaluation for isolated Dynamic-DeepHit faithful 72h runs."""
+"""Training and evaluation for isolated Dynamic-DeepHit faithful landmark runs."""
 
 from __future__ import annotations
 

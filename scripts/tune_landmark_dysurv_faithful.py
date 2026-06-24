@@ -1,3 +1,10 @@
+"""Tune temporal DySurv on the faithful landmark dataset.
+
+This is the dynamic DySurv experiment: it uses temporal clinical trajectories
+plus repeated static covariates, and selects hyperparameters using validation
+metrics only.
+"""
+
 import argparse
 import json
 import sys

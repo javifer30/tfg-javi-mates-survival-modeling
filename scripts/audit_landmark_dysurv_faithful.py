@@ -91,7 +91,7 @@ def write_report(base: dict, tiny_metrics=None):
         "",
         "- Preserved: 72-step LSTM encoder, 3x/5x/3x MLP capacity, latent dimension 20, variational sampling, LogisticHazard head and recurrent decoder.",
         "- Adapted: the target duration is not appended to the input and does not condition the decoder, preventing outcome leakage.",
-        "- Adapted: the 10-day target is measured from the 72-hour landmark using the existing patient-level train/validation/test splits.",
+        "- Adapted: the 10-day target is measured from the selected landmark using the existing patient-level train/validation/test splits.",
         "",
         "## 2. Differences from previous TFG DySurv pipeline",
         "",

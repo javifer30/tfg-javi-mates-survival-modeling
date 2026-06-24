@@ -2,8 +2,10 @@
 Library-based static models for the parametrizable landmark experiment.
 
 The implementation is inspired by the DySurv static MIMIC-IV notebook but uses
-the new TFG 72-hour cohort, train-only preprocessing and validation-only model
-selection.
+the TFG landmark cohort, train-only preprocessing and validation-only model
+selection. The same wrapper trains Kaplan-Meier, CoxPH, DeepSurv-style Cox,
+LogisticHazard, PCHazard and DeepHitSingle so their outputs share one metric
+format.
 """
 
 import json

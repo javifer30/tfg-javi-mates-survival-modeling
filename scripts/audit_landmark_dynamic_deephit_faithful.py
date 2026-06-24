@@ -96,7 +96,7 @@ def write_report(base: dict):
         "- Preserved: LSTM embedding, next-step longitudinal network, temporal attention, cause-specific network, PMF NLL and pairwise ranking loss.",
         "- Preserved: one risk and a softmax event-time distribution.",
         "- Adapted: an explicit tail category represents survival beyond day 10.",
-        "- Adapted: targets are relative to the 72-hour landmark and use the fixed TFG patient splits.",
+        "- Adapted: targets are relative to the selected landmark and use the fixed TFG patient splits.",
         "",
         "## 2. Shared practices with DySurv faithful",
         "",

@@ -1,3 +1,10 @@
+"""Tune the static-only DySurv faithful baseline.
+
+This baseline uses the static part of the faithful dataset and ignores temporal
+sequences. It helps separate the effect of DySurv's architecture from the effect
+of adding longitudinal information.
+"""
+
 import argparse
 import json
 import sys

@@ -36,6 +36,13 @@ TARGET_COLS = [
 
 @dataclass
 class LandmarkStaticPreprocessor:
+    """Train-fitted static feature transformer.
+
+    The object is fitted only on the training split and then reused for
+    validation/test. This is important because medians, scaling parameters and
+    rare categorical levels must not be learned from validation or test data.
+    """
+
     standard_cols: list
     leave_numeric_cols: list
     categorical_cols: list
@@ -139,6 +146,7 @@ def _duration_to_days(values, unit):
 
 
 def load_landmark_static_base_table(config, logger):
+    """Merge flat features with labels and define the post-landmark target."""
     paths = config["paths"]
     columns = config["columns"]
     flat = pd.read_csv(paths["flat_features_path"])
@@ -166,8 +174,14 @@ def load_landmark_static_base_table(config, logger):
     pred_hours = float(config["target"]["prediction_time_hours"])
     pred_days = pred_hours / 24.0
     horizon_days = float(config["target"]["max_horizon_days"])
+
+    # Keep only stays still at risk at the landmark. Durations are then measured
+    # from the landmark, not from ICU admission.
     df = df[df[RAW_DURATION_DAYS_COL] > pred_days].copy()
     df[REL_DURATION_DAYS_COL] = df[RAW_DURATION_DAYS_COL] - pred_days
+
+    # The prediction task is "event within 10 days after landmark". Events after
+    # that horizon are treated as censored at 10 days.
     df[DURATION_COL] = np.minimum(df[REL_DURATION_DAYS_COL], horizon_days).astype("float32")
     df[EVENT_COL] = ((df[RAW_EVENT_COL] == 1) & (df[REL_DURATION_DAYS_COL] <= horizon_days)).astype("int64")
 
@@ -176,6 +190,7 @@ def load_landmark_static_base_table(config, logger):
 
 
 def make_landmark_static_split(df, config, logger):
+    """Create train/validation/test splits before fitting preprocessing."""
     split_cfg = config["split"]
     seed = int(config.get("seed", 42))
     train_size = float(split_cfg.get("train_size", 0.6))
@@ -212,6 +227,7 @@ def feature_columns(df):
 
 
 def validate_landmark_static_datasets(train_df, val_df, test_df, max_horizon_days=10.0):
+    """Check the basic survival assumptions used by the downstream models."""
     datasets = {"train": train_df, "validation": val_df, "test": test_df}
     ids = {name: set(df[ID_COL]) for name, df in datasets.items()}
     if ids["train"] & ids["validation"] or ids["train"] & ids["test"] or ids["validation"] & ids["test"]:
@@ -275,9 +291,13 @@ def build_summary(train_df, val_df, test_df, preprocessor, config):
 
 
 def build_landmark_static_dataset(config, logger):
+    """Build, validate and save the static landmark dataset."""
     df = load_landmark_static_base_table(config, logger)
     train_raw, val_raw, test_raw = make_landmark_static_split(df, config, logger)
     preprocessor = build_landmark_static_preprocessor(config)
+
+    # Fit preprocessing on train only, then apply exactly the same transform to
+    # validation/test. This avoids leaking distributional information.
     train = preprocessor.fit_transform(train_raw, "train")
     val = preprocessor.transform(val_raw, "validation")
     test = preprocessor.transform(test_raw, "test")

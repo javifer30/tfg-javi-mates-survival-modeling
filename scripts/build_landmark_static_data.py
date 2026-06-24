@@ -1,3 +1,10 @@
+"""Build the static table for one landmark.
+
+This is the first step of the pipeline. It reads the local MIMIC-derived flat
+features and labels, keeps only patients still observed at the selected
+landmark, and writes train/validation/test parquet files for the static models.
+"""
+
 import argparse
 import sys
 from pathlib import Path

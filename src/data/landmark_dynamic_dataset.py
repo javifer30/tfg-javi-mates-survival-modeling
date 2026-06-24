@@ -34,6 +34,8 @@ STATIC_META_COLS = {
 
 @dataclass
 class LandmarkDynamicPreprocessor:
+    """Train-fitted temporal preprocessing parameters."""
+
     temporal_features: list
     train_medians: dict
     train_p05: dict
@@ -45,6 +47,7 @@ class LandmarkDynamicPreprocessor:
 
 
 def load_landmark_static_splits(config):
+    """Load the static splits that define the cohort and target labels."""
     static_cfg = config["static"]
     splits = {
         "train": pd.read_parquet(static_cfg["train_path"]),
@@ -59,6 +62,7 @@ def static_feature_columns(df):
 
 
 def validate_static_reference(splits):
+    """Ensure dynamic data starts from the same clean static cohort."""
     ids = {name: set(df[ID_COL].astype(str)) for name, df in splits.items()}
     if ids["train"] & ids["validation"] or ids["train"] & ids["test"] or ids["validation"] & ids["test"]:
         raise ValueError("Overlap detected between static_landmark split IDs")
@@ -132,6 +136,7 @@ def _read_temporal_source(path, source, column_cfg, id_set, max_offset, chunksiz
 
 
 def load_temporal_measurements(config, id_order, sample_ids=None):
+    """Read chart/lab measurements before the configured landmark only."""
     temporal_cfg = config["temporal"]
     columns = config["columns"]
     max_offset = int(temporal_cfg["max_offset_minutes_exclusive"])
@@ -185,6 +190,7 @@ def temporal_feature_coverage(temporal, split_ids, features=None):
 
 
 def select_temporal_features(temporal, train_ids, min_coverage):
+    """Select temporal variables using training-patient coverage only."""
     train_temporal = temporal[temporal[ID_COL].isin(train_ids)]
     denominator = max(len(train_ids), 1)
     coverage = train_temporal.groupby("feature")[ID_COL].nunique().sort_index() / denominator
@@ -216,6 +222,7 @@ def _fit_temporal_stats(raw_train_tensor, features):
 
 
 def _impute_and_scale(raw_tensor, features, medians, p05, p95, clip_min, clip_max):
+    """Forward-fill each patient and use train statistics for remaining gaps."""
     tensor = raw_tensor.copy().astype("float32")
     for feature_idx, feature in enumerate(features):
         values = pd.DataFrame(tensor[:, :, feature_idx]).ffill(axis=1).to_numpy(dtype="float32")
@@ -244,6 +251,7 @@ def _build_raw_tensor(temporal, ids, features, hours):
 
 
 def build_dynamic_split(split_name, static_df, temporal, features, preprocessor, config):
+    """Create one split with dynamic tensors and copied static targets."""
     hours = int(config["temporal"]["hours"])
     ids = static_df[ID_COL].astype(str).tolist()
     raw, mask = _build_raw_tensor(temporal, ids, features, hours)
@@ -269,6 +277,7 @@ def build_dynamic_split(split_name, static_df, temporal, features, preprocessor,
 
 
 def validate_dynamic_arrays(split_name, arrays, static_df, features, hours):
+    """Validate shapes, target ranges and exact patient order."""
     n = len(static_df)
     expected_shape = (n, hours, len(features))
     if arrays["X_seq"].shape != expected_shape:
@@ -410,6 +419,7 @@ def _sample_splits(splits, sample_size):
 
 
 def build_landmark_dynamic_dataset(config, logger, force=False, dry_run=False, sample_size=None):
+    """Build, validate and save the common dynamic dataset for one landmark."""
     output_dir = Path(config["paths"]["output_dir"])
     suffix = config.get("output_file_suffix", "dynamic_landmark")
     if output_dir.exists() and any(output_dir.glob(f"*_{suffix}.npz")) and not force and not dry_run:
@@ -447,6 +457,9 @@ def build_landmark_dynamic_dataset(config, logger, force=False, dry_run=False, s
     hours = int(config["temporal"]["hours"])
 
     train_raw, train_mask = _build_raw_tensor(temporal, splits["train"][ID_COL].astype(str).tolist(), features, hours)
+
+    # Median and percentile scaling are learned from train only, then reused for
+    # validation/test. This mirrors the static pipeline and avoids leakage.
     medians, p05, p95 = _fit_temporal_stats(train_raw, features)
     preprocessor = LandmarkDynamicPreprocessor(
         temporal_features=features,

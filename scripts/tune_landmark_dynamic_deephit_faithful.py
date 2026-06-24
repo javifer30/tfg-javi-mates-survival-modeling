@@ -1,3 +1,9 @@
+"""Tune Dynamic-DeepHit on the faithful landmark dataset.
+
+Dynamic-DeepHit uses the same prepared patient splits as DySurv, which keeps the
+model comparison focused on model behavior rather than data differences.
+"""
+
 import argparse
 import json
 import sys

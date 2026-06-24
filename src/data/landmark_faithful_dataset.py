@@ -1,6 +1,6 @@
-"""Prepare the isolated DySurv-faithful 72h dataset.
+"""Prepare the isolated DySurv-faithful landmark dataset.
 
-The source arrays already enforce the 72-hour landmark and train-fitted
+The source arrays already enforce the selected landmark and train-fitted
 scaling. Missing entries are restored with ``M_seq`` and then imputed using
 the DySurv-like order: within-patient forward fill, backward fill, and a
 train-only residual median. Static features are standardized with train-only
@@ -39,13 +39,14 @@ def load_source_split(source_dir: str | Path, split: str, files: dict[str, str] 
 
 
 def restore_missing(x_seq: np.ndarray, m_seq: np.ndarray) -> np.ndarray:
+    """Convert masked temporal arrays back to NaN-marked missing values."""
     if x_seq.shape != m_seq.shape:
         raise ValueError(f"X_seq and M_seq shapes differ: {x_seq.shape} vs {m_seq.shape}")
     return np.where(m_seq > 0.5, x_seq, np.nan).astype("float32")
 
 
 def within_patient_fill(raw: np.ndarray) -> np.ndarray:
-    """Forward-fill then backward-fill each patient/feature over 72 hours."""
+    """Forward-fill then backward-fill each patient/feature over the landmark window."""
     filled = np.empty_like(raw, dtype="float32")
     for feature_idx in range(raw.shape[2]):
         values = pd.DataFrame(raw[:, :, feature_idx])
@@ -177,6 +178,11 @@ def write_prepared_dataset(config: dict, prepared: dict, stats: dict, checks: di
 
 
 def prepare_dataset(config: dict, force: bool = False) -> dict:
+    """Prepare and save train/validation/test faithful arrays.
+
+    The train split is loaded first to fit temporal medians and static scaling.
+    Validation and test are transformed with those same train-fitted values.
+    """
     output_dir = Path(config["paths"]["prepared_dataset_dir"])
     source_files = split_files(config, "source_split_files")
     output_files = split_files(config, "output_split_files")

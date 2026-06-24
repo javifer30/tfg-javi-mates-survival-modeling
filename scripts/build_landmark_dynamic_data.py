@@ -1,3 +1,10 @@
+"""Build temporal tensors for one landmark.
+
+This step starts from the static landmark cohort, so patient IDs, splits and
+targets remain identical. It then reads chart/lab measurements before the
+landmark and stores dynamic arrays used by the faithful model pipelines.
+"""
+
 import argparse
 import json
 import sys

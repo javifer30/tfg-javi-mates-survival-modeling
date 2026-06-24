@@ -1,11 +1,12 @@
-"""Faithful DySurv adaptation for the 72-hour landmark experiment.
+"""Faithful DySurv adaptation for the landmark experiment.
 
 Reference:
 src/models_references/DySurv/Models/Results/DySurv.ipynb
 
 Preserved structure: LSTM encoder, 3x/5x/3x encoder MLP, variational latent
-state, discrete LogisticHazard head, and recurrent sequence decoder. The
-outcome duration used by the reference decoder is deliberately removed to
+state, discrete LogisticHazard head, and recurrent sequence decoder. The input
+sequence contains temporal clinical variables plus repeated static covariates.
+The outcome duration used by the reference decoder is deliberately removed to
 prevent target leakage. The decoder reconstructs temporal clinical variables
 only; masks and repeated static variables are never reconstruction targets.
 """
@@ -35,6 +36,8 @@ def _mlp(input_dim: int, layers: list[int], output_dim: int, dropout: float) -> 
 
 
 class RecurrentTemporalDecoder(nn.Module):
+    """Decode the latent state back into a temporal clinical trajectory."""
+
     def __init__(self, latent_dim: int, output_dim: int, seq_len: int, dropout: float):
         super().__init__()
         hidden_dim = 2 * latent_dim
@@ -54,6 +57,8 @@ class RecurrentTemporalDecoder(nn.Module):
 
 
 class DySurvFaithful72h(nn.Module):
+    """Temporal DySurv model used for 24h/48h/72h landmark runs."""
+
     def __init__(
         self,
         input_dim: int,
@@ -103,6 +108,7 @@ class DySurvFaithful72h(nn.Module):
         }
 
     def predict_logits(self, x: torch.Tensor) -> torch.Tensor:
+        """Use deterministic latent means for evaluation and prediction."""
         mu, _ = self.encode(x)
         return self.survival_head(mu)
 

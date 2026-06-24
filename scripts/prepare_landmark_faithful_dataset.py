@@ -1,3 +1,10 @@
+"""Prepare the common faithful dataset for DySurv-style models.
+
+The input is the dynamic landmark dataset. The output is a cleaned dataset shared
+by temporal DySurv, Dynamic-DeepHit and static-only DySurv, so these models are
+compared on exactly the same patients, splits and targets.
+"""
+
 import argparse
 import json
 import sys
