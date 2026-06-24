@@ -1,5 +1,0 @@
-Model,Selected config ID,Selection metric,Tie-breaker,Selected hyperparameters,Notes
-CoxPH,coxph_cfg_003,validation_ctd_antolini,validation_ibll,penalizer=0.1; l1_ratio=0.0,Deterministic; selected stable ridge penalization.
-DeepSurv,deepsurv_cfg_018,validation_ctd_antolini,validation_ibll,"hidden_layers=[128, 64]; dropout=0.1; learning_rate=0.0001; weight_decay=0.001",Neural proportional-risk model.
-PCHazard,pchazard_cfg_011,validation_ctd_antolini,validation_ibll,"hidden_layers=[128, 64]; dropout=0.3; learning_rate=0.0005; num_durations=10; max_horizon_days=10; scheme=equidistant",Discrete curve-producing model.
-DeepHit,deephit_cfg_013,validation_ctd_antolini,validation_ibll,"shared_layers=[128, 64]; cause_layers=[64]; dropout=0.1; learning_rate=0.0005; alpha=1.0; beta=0.5; gamma=0.0; ranking_sigma=0.1; include_tail_category=True",Corrected DeepHit with explicit tail support.

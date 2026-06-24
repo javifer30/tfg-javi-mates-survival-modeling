@@ -24,8 +24,7 @@ src/models/   Modelos estáticos pycox/lifelines y modelos dinámicos faithful.
 src/evaluation/ Métricas comunes de supervivencia.
 src/utils/    Configuración, logging, reproducibilidad y resolución landmark.
 tests/        Tests ligeros del pipeline landmark.
-docs/         Historia, decisiones, experimentos y reproducibilidad.
-TFG/          Instrucciones académicas y guía metodológica del TFG.
+Imagenes/     Figuras seleccionadas para la memoria.
 ```
 
 No se versionan datos MIMIC-IV, datasets derivados, modelos entrenados,
@@ -206,13 +205,10 @@ outputs/landmark_72h/dynamic_deephit_faithful/config_used.yaml
 outputs/landmark_72h/dysurv_static_faithful/config_used.yaml
 ```
 
-## Documentación
+## Figuras
 
-- `docs/REPRODUCIBILITY.md`: comandos reproducibles.
-- `docs/DECISIONS.md`: decisiones metodológicas.
-- `docs/EXPERIMENT_LOG.md`: experimentos ejecutados.
-- `docs/PROJECT_HISTORY.md`: historia consolidada.
-- `docs/TODO.md`: tareas pendientes.
+La carpeta `Imagenes/` contiene figuras seleccionadas para la memoria del TFG.
+Las figuras se generan a partir de scripts reproducibles en `scripts/`.
 
-La rama `backup/pre-cleanup-landmark` conserva el estado anterior a la limpieza
-del repositorio.
+Los datos MIMIC-IV, datasets derivados completos, outputs de entrenamiento,
+checkpoints y pesos de modelos se mantienen fuera del repositorio.

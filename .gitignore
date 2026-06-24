@@ -9,13 +9,7 @@ __pycache__/
 .pytest_cache/
 
 # MIMIC-IV data and derived patient-level artifacts
-data/raw/*
-data/interim/*
-data/processed/*
-!data/raw/.gitkeep
-!data/interim/.gitkeep
-!data/processed/.gitkeep
-!data/mimic_extraction_explanation.md
+/data/
 
 # Generated outputs, models and checkpoints
 /outputs/
@@ -29,6 +23,14 @@ basura/
 guidelines/
 Memoria/
 references/
+
+# Local project-management, academic notes and agent instructions
+/docs/
+/TFG/
+SESSION_NOTES.md
+AGENTS.md
+CODEX_INSTRUCTIONS.md
+environment.yml
 
 # Local archives and shortcuts
 *.tar.gz
@@ -50,6 +52,11 @@ outputs - Shortcut.lnk
 *.synctex.gz
 *.toc
 *.pdf
+
+# Model/checkpoint artifacts
+*.pt
+*.pth
+*.ckpt
 
 # External reference repositories kept locally for methodology review
 src/models_references/
