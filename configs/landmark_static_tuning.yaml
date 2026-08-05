@@ -37,6 +37,19 @@ models:
       l1_ratio: [0.0, 0.05, 0.1]
       save_model: [false]
 
+  random_survival_forest:
+    grid:
+      n_estimators: [500]
+      min_samples_leaf: [5, 15, 30]
+      min_samples_split: [10, 20]
+      max_features: [sqrt, 0.5]
+      max_depth: [null]
+      bootstrap: [true]
+      low_memory: [false]
+      n_jobs: [4]
+      verbose: [0]
+      save_model: [false]
+
   deepsurv:
     grid:
       hidden_layers:

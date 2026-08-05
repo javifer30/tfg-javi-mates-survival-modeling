@@ -21,6 +21,7 @@ HORIZONS = list(range(1, 11))
 
 STATIC_MODELS = {
     "coxph": "CoxPH",
+    "random_survival_forest": "Random Survival Forest",
     "deepsurv": "DeepSurv",
     "logistic_hazard": "LogisticHazard",
     "pchazard": "PCHazard",
@@ -31,10 +32,11 @@ DYNAMIC_MODELS = {
     "dynamic_deephit_faithful": "Dynamic-DeepHit",
     "dysurv_faithful": "DySurv",
 }
-CONVENTIONAL_STATIC = ["DeepSurv", "LogisticHazard", "PCHazard", "DeepHit"]
+CONVENTIONAL_STATIC = ["Random Survival Forest", "DeepSurv", "LogisticHazard", "PCHazard", "DeepHit"]
 MAIN_MODEL_ORDER = ["CoxPH", "Best static", "DySurv static", "Dynamic-DeepHit", "DySurv"]
 APPENDIX_MODEL_ORDER = [
     "CoxPH",
+    "Random Survival Forest",
     "DeepSurv",
     "LogisticHazard",
     "PCHazard",
@@ -46,6 +48,7 @@ APPENDIX_MODEL_ORDER = [
 STYLE = {
     "CoxPH": {"color": "#222222", "marker": "o", "linestyle": "-"},
     "Best static": {"color": "#4C78A8", "marker": "s", "linestyle": "-"},
+    "Random Survival Forest": {"color": "#B279A2", "marker": "h", "linestyle": "-"},
     "DeepSurv": {"color": "#4C78A8", "marker": "s", "linestyle": "-"},
     "LogisticHazard": {"color": "#72B7B2", "marker": "^", "linestyle": "-."},
     "PCHazard": {"color": "#9D755D", "marker": "D", "linestyle": ":"},

@@ -42,6 +42,7 @@ MODEL_SPECS = {
     },
 }
 STATIC_MODEL_KEYS = {
+    "Random Survival Forest": "random_survival_forest",
     "DeepSurv": "deepsurv",
     "LogisticHazard": "logistic_hazard",
     "PCHazard": "pchazard",

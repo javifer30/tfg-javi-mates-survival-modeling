@@ -3,9 +3,9 @@ Library-based static models for the parametrizable landmark experiment.
 
 The implementation is inspired by the DySurv static MIMIC-IV notebook but uses
 the TFG landmark cohort, train-only preprocessing and validation-only model
-selection. The same wrapper trains Kaplan-Meier, CoxPH, DeepSurv-style Cox,
-LogisticHazard, PCHazard and DeepHitSingle so their outputs share one metric
-format.
+selection. The same wrapper trains Kaplan-Meier, CoxPH, Random Survival Forest,
+DeepSurv-style Cox, LogisticHazard, PCHazard and DeepHitSingle so their outputs
+share one metric format.
 """
 
 import json
@@ -28,6 +28,7 @@ from src.evaluation.landmark_survival_metrics import (
 MODEL_ALIASES = {
     "kaplan_meier": "kaplan_meier",
     "coxph": "coxph",
+    "random_survival_forest": "random_survival_forest",
     "deepsurv": "deepsurv",
     "logistic_hazard": "logistic_hazard",
     "pchazard": "pchazard",
@@ -65,6 +66,50 @@ def split_xy(df):
     events = df[EVENT_COL].astype("int64").to_numpy()
     ids = df[[ID_COL, DURATION_COL, EVENT_COL, SPLIT_COL]].copy()
     return x, durations, events, ids
+
+
+def rsf_target(durations, events):
+    """Convert landmark targets to scikit-survival's structured representation."""
+    from sksurv.util import Surv
+
+    return Surv.from_arrays(
+        event=np.asarray(events, dtype=bool),
+        time=np.asarray(durations, dtype=float),
+    )
+
+
+def rsf_survival_dataframe(model, x, time_grid):
+    """Evaluate RSF step functions as a time-by-patient survival DataFrame."""
+    times = np.asarray(time_grid, dtype=float)
+    if times.ndim != 1 or times.size == 0 or not np.isfinite(times).all():
+        raise ValueError("RSF evaluation time grid must be a finite one-dimensional array")
+    if np.any(np.diff(times) <= 0):
+        raise ValueError("RSF evaluation time grid must be strictly increasing")
+
+    functions = model.predict_survival_function(x)
+    patient_curves = []
+    for function in functions:
+        knots = np.asarray(function.x, dtype=float)
+        if knots.size == 0:
+            raise ValueError("RSF returned an empty survival function")
+        values = np.ones(times.shape, dtype=float)
+        at_or_after_first_knot = times >= knots[0]
+        evaluation_times = np.minimum(times[at_or_after_first_knot], knots[-1])
+        values[at_or_after_first_knot] = np.asarray(function(evaluation_times), dtype=float)
+        patient_curves.append(values)
+
+    survival = np.asarray(patient_curves, dtype=float)
+    if survival.shape != (len(x), len(times)):
+        raise ValueError(
+            f"Unexpected RSF survival shape {survival.shape}; expected {(len(x), len(times))}"
+        )
+    if not np.isfinite(survival).all():
+        raise ValueError("RSF survival predictions contain non-finite values")
+    if np.any((survival < -1e-8) | (survival > 1.0 + 1e-8)):
+        raise ValueError("RSF survival predictions fall outside [0, 1]")
+    if np.any(np.diff(survival, axis=1) > 1e-8):
+        raise ValueError("RSF survival predictions are not monotone non-increasing")
+    return pd.DataFrame(survival.T, index=times, columns=x.index)
 
 
 def _time_grid(config):
@@ -498,6 +543,52 @@ def train_lifelines_coxph(config, logger):
     return _evaluate_and_save(model_name, split_surv, split_targets, config, metrics_dir, predictions_dir, model=model)
 
 
+def train_random_survival_forest(config, logger):
+    from sksurv.ensemble import RandomSurvivalForest
+
+    model_name = "random_survival_forest"
+    model_cfg = config["model"]
+    splits = load_landmark_static_splits(config)
+    x_train, durations_train, events_train, _ = split_xy(splits["train"])
+    model = RandomSurvivalForest(
+        n_estimators=int(model_cfg.get("n_estimators", 500)),
+        min_samples_split=int(model_cfg.get("min_samples_split", 10)),
+        min_samples_leaf=int(model_cfg.get("min_samples_leaf", 15)),
+        max_features=model_cfg.get("max_features", "sqrt"),
+        max_depth=None if model_cfg.get("max_depth") is None else int(model_cfg["max_depth"]),
+        bootstrap=bool(model_cfg.get("bootstrap", True)),
+        low_memory=bool(model_cfg.get("low_memory", False)),
+        n_jobs=int(model_cfg.get("n_jobs", 4)),
+        random_state=int(config.get("seed", 42)),
+        verbose=int(model_cfg.get("verbose", 0)),
+    )
+    model.fit(x_train, rsf_target(durations_train, events_train))
+
+    time_index = np.asarray(_time_grid(config), dtype=float)
+    metrics_dir, predictions_dir, models_dir = _output_dirs(config, model_name)
+    split_surv = {}
+    split_targets = {}
+    for split_name, df in splits.items():
+        x, durations, events, _ = split_xy(df)
+        split_surv[split_name] = rsf_survival_dataframe(model, x, time_index)
+        split_targets[split_name] = (durations, events)
+
+    if model_cfg.get("save_model", False):
+        import joblib
+
+        joblib.dump(model, models_dir / "random_survival_forest.pkl")
+    _save_labtrans_metadata(model_name, model_cfg, None, metrics_dir, config)
+    return _evaluate_and_save(
+        model_name,
+        split_surv,
+        split_targets,
+        config,
+        metrics_dir,
+        predictions_dir,
+        model=model,
+    )
+
+
 def train_deepsurv(config, logger):
     from pycox.models import CoxPH
 
@@ -558,6 +649,7 @@ def train_deephit_single(config, logger):
 TRAINERS = {
     "kaplan_meier": train_kaplan_meier,
     "coxph": train_lifelines_coxph,
+    "random_survival_forest": train_random_survival_forest,
     "deepsurv": train_deepsurv,
     "logistic_hazard": train_logistic_hazard,
     "pchazard": train_pchazard,
