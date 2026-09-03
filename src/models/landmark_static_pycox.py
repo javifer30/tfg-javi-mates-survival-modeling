@@ -78,27 +78,38 @@ def rsf_target(durations, events):
     )
 
 
-def rsf_survival_dataframe(model, x, time_grid):
-    """Evaluate RSF step functions as a time-by-patient survival DataFrame."""
+def rsf_survival_dataframe(model, x, time_grid, batch_size=128):
+    """Evaluate RSF curves in patient batches and retain only requested times."""
     times = np.asarray(time_grid, dtype=float)
     if times.ndim != 1 or times.size == 0 or not np.isfinite(times).all():
         raise ValueError("RSF evaluation time grid must be a finite one-dimensional array")
     if np.any(np.diff(times) <= 0):
         raise ValueError("RSF evaluation time grid must be strictly increasing")
+    batch_size = int(batch_size)
+    if batch_size <= 0:
+        raise ValueError("RSF prediction_batch_size must be positive")
 
-    functions = model.predict_survival_function(x)
-    patient_curves = []
-    for function in functions:
-        knots = np.asarray(function.x, dtype=float)
-        if knots.size == 0:
-            raise ValueError("RSF returned an empty survival function")
-        values = np.ones(times.shape, dtype=float)
-        at_or_after_first_knot = times >= knots[0]
-        evaluation_times = np.minimum(times[at_or_after_first_knot], knots[-1])
-        values[at_or_after_first_knot] = np.asarray(function(evaluation_times), dtype=float)
-        patient_curves.append(values)
+    survival = np.empty((len(x), len(times)), dtype=float)
+    for start in range(0, len(x), batch_size):
+        stop = min(start + batch_size, len(x))
+        x_batch = x.iloc[start:stop] if hasattr(x, "iloc") else x[start:stop]
+        functions = model.predict_survival_function(x_batch)
+        if len(functions) != len(x_batch):
+            raise ValueError(
+                f"RSF returned {len(functions)} curves for a batch of {len(x_batch)} patients"
+            )
+        for offset, function in enumerate(functions):
+            knots = np.asarray(function.x, dtype=float)
+            if knots.size == 0:
+                raise ValueError("RSF returned an empty survival function")
+            values = np.ones(times.shape, dtype=float)
+            at_or_after_first_knot = times >= knots[0]
+            evaluation_times = np.minimum(times[at_or_after_first_knot], knots[-1])
+            values[at_or_after_first_knot] = np.asarray(function(evaluation_times), dtype=float)
+            survival[start + offset] = values
+        del function
+        del functions
 
-    survival = np.asarray(patient_curves, dtype=float)
     if survival.shape != (len(x), len(times)):
         raise ValueError(
             f"Unexpected RSF survival shape {survival.shape}; expected {(len(x), len(times))}"
@@ -550,12 +561,13 @@ def train_random_survival_forest(config, logger):
     model_cfg = config["model"]
     splits = load_landmark_static_splits(config)
     x_train, durations_train, events_train, _ = split_xy(splits["train"])
+    max_depth = model_cfg.get("max_depth", 6)
     model = RandomSurvivalForest(
-        n_estimators=int(model_cfg.get("n_estimators", 500)),
-        min_samples_split=int(model_cfg.get("min_samples_split", 10)),
-        min_samples_leaf=int(model_cfg.get("min_samples_leaf", 15)),
+        n_estimators=int(model_cfg.get("n_estimators", 30)),
+        min_samples_split=int(model_cfg.get("min_samples_split", 400)),
+        min_samples_leaf=int(model_cfg.get("min_samples_leaf", 200)),
         max_features=model_cfg.get("max_features", "sqrt"),
-        max_depth=None if model_cfg.get("max_depth") is None else int(model_cfg["max_depth"]),
+        max_depth=None if max_depth is None else int(max_depth),
         bootstrap=bool(model_cfg.get("bootstrap", True)),
         low_memory=bool(model_cfg.get("low_memory", False)),
         n_jobs=int(model_cfg.get("n_jobs", 4)),
@@ -569,8 +581,15 @@ def train_random_survival_forest(config, logger):
     split_surv = {}
     split_targets = {}
     for split_name, df in splits.items():
+        if split_name == "train":
+            continue
         x, durations, events, _ = split_xy(df)
-        split_surv[split_name] = rsf_survival_dataframe(model, x, time_index)
+        split_surv[split_name] = rsf_survival_dataframe(
+            model,
+            x,
+            time_index,
+            batch_size=int(model_cfg.get("prediction_batch_size", 128)),
+        )
         split_targets[split_name] = (durations, events)
 
     if model_cfg.get("save_model", False):

@@ -181,8 +181,8 @@ def test_rsf_survival_orientation_monotonicity_and_reproducibility():
     second = RandomSurvivalForest(**params).fit(x, target)
     times = np.arange(1.0, 11.0)
 
-    first_survival = rsf_survival_dataframe(first, x, times)
-    second_survival = rsf_survival_dataframe(second, x, times)
+    first_survival = rsf_survival_dataframe(first, x, times, batch_size=7)
+    second_survival = rsf_survival_dataframe(second, x, times, batch_size=len(x))
 
     assert first_survival.shape == (10, len(x))
     assert first_survival.index.tolist() == times.tolist()
@@ -192,6 +192,36 @@ def test_rsf_survival_orientation_monotonicity_and_reproducibility():
     assert (np.diff(first_survival.to_numpy(), axis=0) <= 1e-8).all()
     assert first_survival.iloc[-1].round(8).nunique() > 1
     np.testing.assert_allclose(first_survival, second_survival, rtol=0.0, atol=0.0)
+
+
+def test_rsf_prediction_batches_never_exceed_configured_size():
+    from sksurv.ensemble import RandomSurvivalForest
+
+    x, durations, events = _synthetic_rsf_data(n_samples=29)
+    fitted = RandomSurvivalForest(
+        n_estimators=4,
+        min_samples_split=4,
+        min_samples_leaf=2,
+        max_features="sqrt",
+        low_memory=False,
+        n_jobs=1,
+        random_state=42,
+    ).fit(x, rsf_target(durations, events))
+
+    class RecordingModel:
+        def __init__(self, model):
+            self.model = model
+            self.batch_sizes = []
+
+        def predict_survival_function(self, x_batch):
+            self.batch_sizes.append(len(x_batch))
+            return self.model.predict_survival_function(x_batch)
+
+    recording_model = RecordingModel(fitted)
+    survival = rsf_survival_dataframe(recording_model, x, np.arange(1.0, 11.0), batch_size=8)
+
+    assert survival.shape == (10, len(x))
+    assert recording_model.batch_sizes == [8, 8, 8, 5]
 
 
 def test_rsf_training_uses_validation_only_when_test_is_disabled(tmp_path):
@@ -228,6 +258,7 @@ def test_rsf_training_uses_validation_only_when_test_is_disabled(tmp_path):
             "max_features": "sqrt",
             "n_jobs": 1,
             "low_memory": False,
+            "prediction_batch_size": 8,
             "save_model": False,
         },
         "evaluation": {
@@ -241,8 +272,7 @@ def test_rsf_training_uses_validation_only_when_test_is_disabled(tmp_path):
 
     metrics = train_random_survival_forest(config, _logger())
 
-    assert set(metrics["splits"]) == {"train", "validation"}
-    assert "test" not in metrics["splits"]
+    assert set(metrics["splits"]) == {"validation"}
     assert math.isfinite(metrics["splits"]["validation"]["ctd_antolini"])
     metrics_path = output_dir / "metrics" / "random_survival_forest" / "random_survival_forest_metrics.json"
     assert metrics_path.exists()
@@ -251,7 +281,7 @@ def test_rsf_training_uses_validation_only_when_test_is_disabled(tmp_path):
 def test_rsf_grid_and_landmark_dry_runs_are_stable(tmp_path):
     base_config = yaml.safe_load(Path("configs/landmark_static_tuning.yaml").read_text(encoding="utf-8"))
     grid = base_config["models"]["random_survival_forest"]["grid"]
-    assert len(expand_grid(grid)) == 12
+    assert len(expand_grid(grid)) == 8
 
     for hours in (24, 48, 72):
         config = apply_landmark_static_tuning_config(base_config, hours)

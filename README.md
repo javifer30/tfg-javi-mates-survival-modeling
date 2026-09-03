@@ -107,6 +107,7 @@ Modelos estáticos:
 
 - Kaplan-Meier descriptivo.
 - CoxPH.
+- Random Survival Forest.
 - DeepSurv-style CoxPH.
 - LogisticHazard.
 - PCHazard.
@@ -129,7 +130,7 @@ Planificar sin entrenar:
 python scripts/tune_landmark_static_models.py ^
   --config configs/landmark_static_tuning.yaml ^
   --landmark-hours 72 ^
-  --models coxph deepsurv pchazard deephit_single ^
+  --models coxph random_survival_forest deepsurv pchazard deephit_single ^
   --dry-run
 ```
 
@@ -166,7 +167,8 @@ Tras seleccionar hiperparámetros por validación:
 ```bash
 python scripts/run_final_landmark_static_seeds.py ^
   --config configs/landmark_static_tuning.yaml ^
-  --landmark-hours 72
+  --landmark-hours 72 ^
+  --models coxph random_survival_forest deepsurv logistic_hazard pchazard deephit_single
 ```
 
 ```bash
@@ -205,10 +207,44 @@ outputs/landmark_72h/dynamic_deephit_faithful/config_used.yaml
 outputs/landmark_72h/dysurv_static_faithful/config_used.yaml
 ```
 
+## Auditoría y Figuras Finales
+
+Las tablas de revisión final y las figuras de la memoria se generan desde los
+artefactos finales ya existentes, sin entrenar modelos ni modificar métricas:
+
+```bash
+python scripts/audit_landmark_results_artifacts.py
+```
+
+El script escribe tablas de auditoría en:
+
+```text
+outputs/results_audit/
+```
+
+y figuras completas en:
+
+```text
+outputs/figures/landmark_final/
+```
+
 ## Figuras
 
-La carpeta `Imagenes/` contiene figuras seleccionadas para la memoria del TFG.
-Las figuras se generan a partir de scripts reproducibles en `scripts/`.
+La carpeta `Imagenes/Bitmap/` contiene únicamente las figuras seleccionadas
+para la versión final de la memoria:
+
+```text
+Imagenes/Bitmap/DySurv.png
+Imagenes/Bitmap/ctd_landmark_main.png
+Imagenes/Bitmap/cindex_horizon_main_24_48_72.png
+Imagenes/Bitmap/km_risk_groups_dynamic_models_24_48_72.png
+Imagenes/Bitmap/km_vs_predicted_survival_dynamic_dysurv_24_72.png
+Imagenes/Bitmap/ctd_landmark_appendix_all_models.png
+Imagenes/Bitmap/cindex_horizon_appendix_all_models_24_48_72.png
+Imagenes/Bitmap/km_risk_groups_faithful_models_24_48_72.png
+Imagenes/Bitmap/km_vs_predicted_survival_dynamic_dysurv_24_48_72.png
+Imagenes/Bitmap/km_vs_predicted_survival_dysurv_static_vs_temporal_24_48_72.png
+```
 
 Los datos MIMIC-IV, datasets derivados completos, outputs de entrenamiento,
 checkpoints y pesos de modelos se mantienen fuera del repositorio.
